@@ -1,69 +1,66 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+import NavToggle from "./components/NavToggle";
+import HeaderBlurBlock from "./components/HeaderBlurBlock";
+import Header from "./components/Header";
+import CookieNotice from "./components/CookieNotice";
+import SiteLoader from "./components/SiteLoader";
+import NavTransitionMask from "./components/NavTransitionMask";
+import Landing from "./components/sections/Landing";
+import Introduction from "./components/sections/Introduction";
+import ManifestoIntro from "./components/sections/ManifestoIntro";
+import ManifestoBlock from "./components/sections/ManifestoBlock";
+import TeamInvestors from "./components/sections/TeamInvestors";
+import Footer from "./components/sections/Footer";
+import ScriptLoader from "./ScriptLoader";
 
-export default function Home() {
+export default function Page() {
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>
-            To get started, edit the{" "}
-            <code className={styles.code}>page.tsx</code> file.
-          </h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <>
+      <NavToggle />
+      <HeaderBlurBlock />
+      <Header />
+      <CookieNotice />
+      <SiteLoader />
+      <NavTransitionMask />
+      <div asscroll-container="">
+        <main>
+          <Landing />
+          <Introduction />
+          <ManifestoIntro />
+          <ManifestoBlock
+            align="items-end@md"
+            title="Spark lightbulb moments"
+            paragraphs={[
+              "Dala is your intelligent, real-time source of truth that eliminates the cultural, financial and operational struggles of splintered tools.",
+              "We connect your systems behind the scenes and pull together exactly the knowledge you require into an elegant contextual view.",
+              "Just ask Dala for the answer that advances your work, and helps you make better decisions with more confidence.",
+            ]}
+          />
+          <ManifestoBlock
+            align="items-start@md"
+            title="Build a better world of work"
+            paragraphs={[
+              <>
+                Our mission is to make work more coherent and delightful—reframing productivity from <em>doing more</em>{" "}
+                to{" "}
+                <a href="https://medium.com/dala-ai/why-we-started-dala-a36fc6cbbdb9" target="_blank" rel="noreferrer noopener">
+                  <em>
+                    being better<span className="t-white">.</span>
+                  </em>
+                </a>
+              </>,
+              "Your happiest and most purposeful moments at work are when you’re in flow, intellectually stimulated, and creating value for customers.",
+              "We want to recreate that every time you experience Dala. A tool that is completely integrated with how you think, feel and work.",
+            ]}
+          />
+          <TeamInvestors />
+          <Footer />
+          <div style={{ position: "absolute", left: 0, bottom: "-1px", width: "2px", height: "2px" }}></div>
+        </main>
+      </div>
+      <div className="fixed fill w-1/1 h-1/1 z-negative user-select-none pointer-events-none">
+        <canvas id="canvas" />
+      </div>
+      <ScriptLoader />
+    </>
   );
 }
