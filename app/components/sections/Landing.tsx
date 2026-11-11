@@ -4,13 +4,14 @@ export default function Landing() {
       <div anchor-target="landing"></div>
       <div className="section landing | js-section" section-name="landing">
         <h2
-          className="landing__title t-56 t-80@xs t-104@sm t-150@md t-lh-0.9 -t-ls-0.03 t-400 mb-1.5 t-lh-1.1 mb-1"
+          className="landing__title prototype-copy-hidden t-56 t-80@xs t-104@sm t-150@md t-lh-0.9 -t-ls-0.03 t-400 mb-1.5 t-lh-1.1 mb-1"
+          aria-hidden="true"
           animate-from="preset: 'splitTextRotateIn', delay: 0, duration: 1, scrollTrigger: { children: 'span' }"
         >
           <span className="d-block">Unlock</span> <span className="d-block">collective</span>{" "}
           <span className="d-block">wisdom.</span>
         </h2>
-        <div className="mobile-blur mt-0 mb-auto">
+        <div className="mobile-blur prototype-copy-hidden mt-0 mb-auto" aria-hidden="true">
           <div className="landing__body">
             <div
               className="t-16 t-lh-1.2 t-ls-0.05 t-600 t-uppercase mb-1 t-yellow"

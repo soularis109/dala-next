@@ -1,0 +1,186 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --color-primary: #041e42;
+    --color-accent: #d6be93;
+    --color-background: #f6f2e9;
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --color-primary: #f6f2e9;
+    --color-accent: #d6be93;
+    --color-background: #0b1220;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-primary);
+    font-family: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+    font-weight: 300;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-playfair), Georgia, serif;
+  }
+}
+
+@layer components {
+  .brand-section-dark {
+    @apply bg-primary text-background;
+  }
+
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    background: transparent;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: background-color 0.2s, color 0.2s;
+  }
+
+  .theme-toggle:hover {
+    background: var(--line);
+  }
+
+  .theme-toggle svg {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+
+  .theme-toggle .icon-sun {
+    display: none;
+  }
+
+  :root[data-theme="dark"] .theme-toggle .icon-sun {
+    display: block;
+  }
+
+  :root[data-theme="dark"] .theme-toggle .icon-moon {
+    display: none;
+  }
+
+  .prototype-copy-hidden {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .folder-variant-toggle {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 5.75rem;
+    z-index: 1200;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.35rem;
+    border: 1px solid var(--line);
+    border-radius: 9999px;
+    background: var(--canvas-glass);
+    box-shadow: var(--header-shadow);
+    backdrop-filter: blur(16px);
+    pointer-events: auto;
+  }
+
+  .folder-variant-toggle__caption {
+    padding: 0 0.45rem 0 0.65rem;
+    color: var(--ink-soft);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .folder-variant-toggle__button {
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 0;
+    border-radius: 9999px;
+    color: var(--ink);
+    background: transparent;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.2s, background-color 0.2s, transform 0.2s;
+  }
+
+  .folder-variant-toggle__button:hover {
+    transform: translateY(-1px);
+    background: var(--line);
+  }
+
+  .folder-variant-toggle__button[aria-pressed="true"] {
+    color: var(--btn-text);
+    background: var(--purple);
+  }
+
+  .folder-variant-toggle__button:focus-visible {
+    outline: 2px solid var(--yellow);
+    outline-offset: 2px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .footer .footer__head--visa {
+    width: min(36rem, 40vw) !important;
+    max-width: 36rem !important;
+    margin: auto 4vw auto auto !important;
+    text-align: left !important;
+  }
+
+  .footer .footer__head--visa h2 {
+    text-align: left !important;
+  }
+
+  .footer .footer__head--visa .justify-center {
+    justify-content: flex-start !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .folder-variant-toggle {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .folder-variant-toggle__button {
+    transition: none;
+  }
+}
+
+/* Animation-only mode (default; add ?text to the URL to show the copy again).
+   Uses visibility, not display/removal, so section heights and sectionProgress timings stay identical. */
+html[data-anim-only] main,
+html[data-anim-only] .header,
+html[data-anim-only] .header .nav,
+html[data-anim-only] .header .nav *,
+html[data-anim-only] .header__logo,
+html[data-anim-only] .header__cta .btn,
+html[data-anim-only] .header__bg,
+html[data-anim-only] .header-blur-block,
+html[data-anim-only] .cookie-notice {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+html[data-anim-only] .header .theme-toggle {
+  visibility: visible !important;
+  pointer-events: auto !important;
+}

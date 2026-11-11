@@ -17,7 +17,7 @@ const SOCIAL_LINKS = [
 export default function Footer() {
   return (
     <div className="section footer | js-section">
-      <div className="footer__head">
+      <div className="footer__head footer__head--visa">
         <h2
           className="t-40 t-lh-1 t-48@sm t-lh-1.2@sm t-64@md t-lh-1.1@md -t-ls-0.03 t-400 mb-2"
           animate-from="preset: 'splitTextRotateIn', scrollTrigger: { start: 'top bottom' }"

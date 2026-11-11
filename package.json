@@ -6,10 +6,17 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "assets:documents": "node scripts/generate-document-particles.mjs",
+    "assets:atlas": "node scripts/generate-document-atlas.mjs",
+    "assets:form": "node scripts/generate-master-form.mjs",
+    "assets:stamp": "node scripts/generate-stamp.mjs",
+    "assets:stamp-body": "node scripts/cutout-stamp.mjs",
+    "assets:folder-panel": "node scripts/cutout-folder.mjs"
   },
   "dependencies": {
     "gsap": "3.7.1",
+    "lil-gui": "^0.21.0",
     "next": "16.4.4",
     "react": "19.3.0",
     "react-dom": "19.3.0"
@@ -18,8 +25,11 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "autoprefixer": "^10.6.2",
     "eslint": "^9",
     "eslint-config-next": "16.4.4",
+    "postcss": "^8.5.32",
+    "tailwindcss": "^3.4.19",
     "typescript": "^5"
   }
 }

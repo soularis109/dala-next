@@ -11,6 +11,8 @@ import ManifestoBlock from "./components/sections/ManifestoBlock";
 import TeamInvestors from "./components/sections/TeamInvestors";
 import Footer from "./components/sections/Footer";
 import ScriptLoader from "./ScriptLoader";
+import DevTuner from "./DevTuner";
+import FolderVariantToggle from "./components/FolderVariantToggle";
 
 export default function Page() {
   return (
@@ -28,28 +30,20 @@ export default function Page() {
           <ManifestoIntro />
           <ManifestoBlock
             align="items-end@md"
-            title="Spark lightbulb moments"
+            title="Document flows"
             paragraphs={[
-              "Dala is your intelligent, real-time source of truth that eliminates the cultural, financial and operational struggles of splintered tools.",
-              "We connect your systems behind the scenes and pull together exactly the knowledge you require into an elegant contextual view.",
-              "Just ask Dala for the answer that advances your work, and helps you make better decisions with more confidence.",
+              "Your documents move into a structured queue, keeping every file visible as it enters the review process.",
+              "Each item follows the same clear route, so nothing is lost between submission, verification and decision.",
+              "This is placeholder copy; final wording will be supplied after the animation direction is approved.",
             ]}
           />
           <ManifestoBlock
             align="items-start@md"
-            title="Build a better world of work"
+            title="Processing"
             paragraphs={[
-              <>
-                Our mission is to make work more coherent and delightful—reframing productivity from <em>doing more</em>{" "}
-                to{" "}
-                <a href="https://medium.com/dala-ai/why-we-started-dala-a36fc6cbbdb9" target="_blank" rel="noreferrer noopener">
-                  <em>
-                    being better<span className="t-white">.</span>
-                  </em>
-                </a>
-              </>,
-              "Your happiest and most purposeful moments at work are when you’re in flow, intellectually stimulated, and creating value for customers.",
-              "We want to recreate that every time you experience Dala. A tool that is completely integrated with how you think, feel and work.",
+              "The application is checked, matched and prepared for a decision through one consistent process.",
+              "A verified document receives its mark and continues to the final result without breaking the flow.",
+              "This is placeholder copy; final wording will be supplied by the client.",
             ]}
           />
           <TeamInvestors />
@@ -61,6 +55,8 @@ export default function Page() {
         <canvas id="canvas" />
       </div>
       <ScriptLoader />
+      <DevTuner />
+      <FolderVariantToggle />
     </>
   );
 }

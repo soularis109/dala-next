@@ -1,10 +1,25 @@
 import type { Metadata, Viewport } from "next";
+import { Montserrat, Playfair_Display } from "next/font/google";
 import Script from "next/script";
 import { gtagInit, posthogInit } from "./analytics";
+import "./globals.css";
+
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  variable: "--font-playfair",
+  display: "swap",
+});
+
+const montserrat = Montserrat({
+  subsets: ["latin"],
+  weight: ["300", "700"],
+  variable: "--font-montserrat",
+  display: "swap",
+});
 
 const desc = "Your workplace has the answer. Just ask Dala for it.";
 const ogAlt =
-  'The Dala logo above the headline "Unlock collective wisdom", sitting on top of a 3D brain composed of many small pyramidal particles.';
+  'The Dala logo above the headline "Unlock collective wisdom", with a large 3D document assembled from thousands of small paper documents.';
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://dala.ai"),
@@ -37,7 +52,7 @@ export const metadata: Metadata = {
     images: [{ url: "https://dala.ai/images/twitter-og.jpg", alt: ogAlt }],
   },
   other: {
-    "msapplication-TileColor": "#000",
+    "msapplication-TileColor": "#F6F2E9",
     "msapplication-config": "/images/favicons/browserconfig.xml",
   },
 };
@@ -46,28 +61,27 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   userScalable: true,
-  themeColor: "#000000",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F6F2E9" },
+    { media: "(prefers-color-scheme: dark)", color: "#0B1220" },
+  ],
 };
 
-const fonts = ["Light", "Regular", "SemiBold"];
+// Runs before first paint: picks saved theme or the system preference.
+// Also enables "animation only" mode (all site copy hidden via CSS, layout untouched) unless the URL has ?text.
+const themeInit = `(function(){try{var t=localStorage.getItem('theme');if(t!=='dark'&&t!=='light'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.setAttribute('data-theme',t)}catch(e){}try{if(!/[?&]text(=|&|$)/.test(location.search))document.documentElement.setAttribute('data-anim-only','')}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${playfair.variable} ${montserrat.variable}`} suppressHydrationWarning>
       <head>
-        {fonts.map((f) => (
-          <link
-            key={f}
-            rel="preload"
-            as="font"
-            href={`/fonts/PPNeueMontreal-${f}.woff2`}
-            crossOrigin=""
-          />
-        ))}
+        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
         {/* eslint-disable-next-line @next/next/no-css-tags */}
         <link rel="stylesheet" href="/css/style.css" />
+        {/* eslint-disable-next-line @next/next/no-css-tags */}
+        <link rel="stylesheet" href="/css/light-theme.css" />
       </head>
-      <body>
+      <body className="bg-background font-montserrat font-light text-primary antialiased">
         {children}
         <Script id="gtag-init" strategy="afterInteractive" dangerouslySetInnerHTML={{ __html: gtagInit }} />
         <Script src="https://www.googletagmanager.com/gtag/js?id=G-L5SSFERMSM" strategy="afterInteractive" />
