@@ -63,7 +63,14 @@ function build(GUI: Any, u: Any, gl: Any) {
   const coreColor = uni(core._material.customUniforms, "u_colorFactor");
   const attract = uni(core._material.customUniforms, "u_attract");
   const attractDepth = core._depthMaterial?.customUniforms?.u_attract;
+  const stageAttract = uni(core._material.customUniforms, "u_stageAttract");
+  const stageLift = uni(core._material.customUniforms, "u_stageLift");
+  const stageScale = uni(core._material.customUniforms, "u_stageScale");
+  const stageMaxOffset = uni(core._material.customUniforms, "u_stageMaxOffset");
+  const stageTune: Any = core._stageTune; // JS-side spring rates (grow / return / magnet)
   const fgScale = uni(fg._material.customUniforms, "u_scale");
+  const fgAttract = uni(fg._material.customUniforms, "u_attract");
+  const fgAttractDepth = fg._depthMaterial?.customUniforms?.u_attract;
   const spring = core._simulationSpring.material.uniforms;
   const bloom = comp._bloomPass;
   const bokeh = comp._bokehPass.uniforms;
@@ -84,9 +91,21 @@ function build(GUI: Any, u: Any, gl: Any) {
     fgScale: fgScale.value,
     colorFactor: coreColor.value,
     motion: u.documentMotionTarget,
+    introDuration: u.introDuration ?? 5.5,
+    heroTilt: u.heroTiltUniform?.value ?? 1,
+    heroDensity: u.heroDensityUniform?.value ?? 0.38,
+    exFloat: u.exFloatUniform?.value ?? 1,
     spring: spring.u_spring.value,
     friction: spring.u_friction.value,
     attract: attract?.value ?? 0,
+    stageAttract: stageAttract?.value ?? 0,
+    stageLift: stageLift?.value ?? 0,
+    stageScale: stageScale?.value ?? 0,
+    stageGrow: stageTune?.growGain ?? 0.14,
+    stageFollow: stageTune?.followStiffness ?? 0.14,
+    stageFriction: stageTune?.followDamping ?? 0.65,
+    stageOffset: stageTune?.maxOffset ?? 12,
+    stageReturn: stageTune?.returnGain ?? 0.18,
     bloomStrength: bloom.strength,
     bloomThreshold: bloom.threshold,
     bloomRadius: bloom.radius,
@@ -136,9 +155,54 @@ function build(GUI: Any, u: Any, gl: Any) {
   parts.add(S, "motion", 0, 2, 0.01).name("Живість руху").onChange((v: number) => (u.documentMotionTarget = v));
   parts.add(S, "spring", 0.001, 0.03, 0.0005).name("Пружність").onChange((v: number) => (spring.u_spring.value = v));
   parts.add(S, "friction", 0.7, 0.98, 0.001).name("Тертя (гасіння)").onChange((v: number) => (spring.u_friction.value = v));
-  parts.add(S, "attract", 0, 0.6, 0.005).name("Прилипання до миші (hero)").onChange((v: number) => {
+  parts.add(S, "attract", 0, 1.2, 0.005).name("Магніт до миші (hero)").onChange((v: number) => {
     if (attract) attract.value = v;
     if (attractDepth) attractDepth.value = v;
+    if (fgAttract) fgAttract.value = v;
+    if (fgAttractDepth) fgAttractDepth.value = v;
+  });
+  parts
+    .add(S, "heroTilt", 0, 2, 0.01)
+    .name("3D-нахил документів (hero)")
+    .onChange((v: number) => {
+      if (u.heroTiltUniform) u.heroTiltUniform.value = v;
+    });
+  parts
+    .add(S, "heroDensity", 0.1, 1, 0.01)
+    .name("Кількість документів (hero)")
+    .onChange((v: number) => {
+      if (u.heroDensityUniform) u.heroDensityUniform.value = v;
+    });
+  parts
+    .add(S, "exFloat", 0, 2, 0.01)
+    .name("Рух після розльоту")
+    .onChange((v: number) => {
+      if (u.exFloatUniform) u.exFloatUniform.value = v;
+    });
+  parts.add(S, "stageAttract", 0, 1.2, 0.005).name("Магніт блока документа").onChange((v: number) => {
+    if (stageAttract) stageAttract.value = v;
+  });
+  parts.add(S, "stageLift", 0, 2, 0.01).name("Підйом блока документа").onChange((v: number) => {
+    if (stageLift) stageLift.value = v;
+  });
+  parts.add(S, "stageScale", 0, 0.2, 0.005).name("Збільшення блока").onChange((v: number) => {
+    if (stageScale) stageScale.value = v;
+  });
+  parts.add(S, "stageGrow", 0.02, 0.2, 0.005).name("Швидкість збільшення").onChange((v: number) => {
+    if (stageTune) stageTune.growGain = v;
+  });
+  parts.add(S, "stageFollow", 0.02, 0.2, 0.005).name("Пружність магніту").onChange((v: number) => {
+    if (stageTune) stageTune.followStiffness = v;
+  });
+  parts.add(S, "stageFriction", 0.6, 0.95, 0.005).name("Тертя магніту").onChange((v: number) => {
+    if (stageTune) stageTune.followDamping = v;
+  });
+  parts.add(S, "stageOffset", 0, 30, 1).name("Макс. зсув блока (px)").onChange((v: number) => {
+    if (stageTune) stageTune.maxOffset = v;
+    if (stageMaxOffset) stageMaxOffset.value = v;
+  });
+  parts.add(S, "stageReturn", 0.02, 0.2, 0.005).name("Швидкість повернення").onChange((v: number) => {
+    if (stageTune) stageTune.returnGain = v;
   });
 
   const post = gui.addFolder("Світіння і розмиття");
@@ -168,6 +232,18 @@ function build(GUI: Any, u: Any, gl: Any) {
   window.addEventListener("dala:folder-variant", onFolderVariant);
 
   const tools = gui.addFolder("Інструменти");
+  tools
+    .add(
+      {
+        replayIntro: () => (window as Any).__DALA_REPLAY_INTRO__?.(),
+      },
+      "replayIntro",
+    )
+    .name("Повторити вхід документів");
+  tools
+    .add(S, "introDuration", 2, 10, 0.1)
+    .name("Тривалість входу, с")
+    .onChange((v: number) => (u.introDuration = v));
   tools
     .add(
       {

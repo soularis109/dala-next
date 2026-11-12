@@ -838,3 +838,9 @@ npx next build --webpack
 
 ### Оновлення (крок 9): файли з `public/assets` підключені напряму
 Документ `document-2048.png` (формація — прямокутний A4), відбиток `stamp-impression-alpha.png` + спрайт тіла з S-01 (`stamp-body.png`), папка з `folder-cover-alpha.png` / `folder-pocket-alpha.png` / `folder-panel.png` (площини). Похідні файли генерують `npm run assets:stamp-body` і `assets:folder-panel`. Деталі: `docs/animation-scenario.md`, крок 9. Старі `master-form.png` і `stamp-mark.png` лишились у `public/images`, але більше не вантажаться.
+
+## Note 2026-11-12 — фронтальний документ і плоска папка
+
+- «Обробка» (3.3→5.0): документ більше не лежить під нахилом. `rotX`, `rotY`, `rotZ` на 3.3–3.5 прибрано; печатка опускається зверху-збоку в площині кадру (`Stamp.update`, `HIGH = 1.6`, `swoop` по y = 2.2).
+- Папка у фіналі: листки плоскі (без затінення сторін і z-підйому, пружне замикання ease-out-back). Переворот варіанта A і відкриття обкладинки ортографічні: масштаб по x замість 3D-шарніра. Варіант B пульсує в площині кадру.
+- Детальний журнал і перевірки — `docs/animation-scenario.md`, розділ 5, «Крок 11».
