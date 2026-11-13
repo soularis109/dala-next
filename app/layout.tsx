@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Montserrat, Playfair_Display } from "next/font/google";
 import Script from "next/script";
+import { installHeroPointer } from "../legacy/hero-pointer.cjs";
 import { gtagInit, posthogInit } from "./analytics";
 import "./globals.css";
 
@@ -67,8 +68,10 @@ export const viewport: Viewport = {
   ],
 };
 
-// Runs before first paint: picks saved theme or the system preference.
-// Also enables "animation only" mode (all site copy hidden via CSS, layout untouched) unless the URL has ?text.
+// Capture real hover coordinates while the animation bundle is still loading.
+const heroPointerInit = `(${installHeroPointer.toString()})(window);`;
+
+// Set theme and animation-only mode before first paint.
 const themeInit = `(function(){try{var t=localStorage.getItem('theme');if(t!=='dark'&&t!=='light'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.setAttribute('data-theme',t)}catch(e){}try{if(!/[?&]text(=|&|$)/.test(location.search))document.documentElement.setAttribute('data-anim-only','')}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -82,6 +85,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="stylesheet" href="/css/light-theme.css" />
       </head>
       <body className="bg-background font-montserrat font-light text-primary antialiased">
+        <Script id="hero-pointer-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: heroPointerInit }} />
         {children}
         <Script id="gtag-init" strategy="afterInteractive" dangerouslySetInnerHTML={{ __html: gtagInit }} />
         <Script src="https://www.googletagmanager.com/gtag/js?id=G-L5SSFERMSM" strategy="afterInteractive" />

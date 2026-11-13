@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="1188" viewBox="0 0 840 1188"><defs>
+  <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FCFAF5"/><stop offset="1" stop-color="#F1ECE2"/></linearGradient>
+  <linearGradient id="pocket" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#EEE7DA"/><stop offset="1" stop-color="#E4DACA"/></linearGradient>
+</defs>
+  <rect x="82" y="354" width="676" height="274" rx="12" fill="#041E42" opacity=".07"/>
+  <rect x="76" y="344" width="688" height="274" rx="10" fill="url(#paper)" stroke="#D6BE93" stroke-width="3"/>
+  <rect x="88" y="356" width="664" height="250" rx="5" fill="none" stroke="#DCD7CC" stroke-width="1.5"/>
+  <path d="M110 390L143 474H163L196 390H174L153 449L132 390Z M218 390H240V474H218Z M330 392H278Q262 392 262 410V422Q262 439 280 439H305V454H263V474H313Q330 474 330 456V438Q330 420 312 420H286V410H330Z M349 474L379 390H403L433 474H410L404 456H377L371 474Z M383 437H398L391 414Z" fill="#041E42" fill-rule="evenodd"/>
+  <path d="M468 393H714M468 423H675M468 453H697" stroke="#A8ACAB" stroke-width="7" stroke-linecap="round"/>
+  <path d="M110 504H730" stroke="#D6BE93" stroke-width="2"/>
+  <g stroke="#899090" stroke-width="6" stroke-linecap="round"><path d="M112 530H300M352 530H542M590 530H716M112 557H247M352 557H484M590 557H690"/></g>
+  <path d="M111 586H718" stroke="#D6D5D0" stroke-width="3" stroke-dasharray="3 7"/>
+</svg>

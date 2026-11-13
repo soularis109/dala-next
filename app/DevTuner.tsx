@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { normalizeFinaleMode, publishFinaleMode, type FinaleMode } from "./lib/finaleControls";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Any = any;
@@ -63,11 +64,8 @@ function build(GUI: Any, u: Any, gl: Any) {
   const coreColor = uni(core._material.customUniforms, "u_colorFactor");
   const attract = uni(core._material.customUniforms, "u_attract");
   const attractDepth = core._depthMaterial?.customUniforms?.u_attract;
-  const stageAttract = uni(core._material.customUniforms, "u_stageAttract");
-  const stageLift = uni(core._material.customUniforms, "u_stageLift");
-  const stageScale = uni(core._material.customUniforms, "u_stageScale");
-  const stageMaxOffset = uni(core._material.customUniforms, "u_stageMaxOffset");
-  const stageTune: Any = core._stageTune; // JS-side spring rates (grow / return / magnet)
+  const scatterTune: Any = core._scatterTune;
+  const idleTune: Any = core._idleTune;
   const fgScale = uni(fg._material.customUniforms, "u_scale");
   const fgAttract = uni(fg._material.customUniforms, "u_attract");
   const fgAttractDepth = fg._depthMaterial?.customUniforms?.u_attract;
@@ -91,21 +89,19 @@ function build(GUI: Any, u: Any, gl: Any) {
     fgScale: fgScale.value,
     colorFactor: coreColor.value,
     motion: u.documentMotionTarget,
-    introDuration: u.introDuration ?? 5.5,
+    introDuration: u.introDuration ?? u.defaultIntroDuration,
     heroTilt: u.heroTiltUniform?.value ?? 1,
     heroDensity: u.heroDensityUniform?.value ?? 0.38,
     exFloat: u.exFloatUniform?.value ?? 1,
     spring: spring.u_spring.value,
     friction: spring.u_friction.value,
     attract: attract?.value ?? 0,
-    stageAttract: stageAttract?.value ?? 0,
-    stageLift: stageLift?.value ?? 0,
-    stageScale: stageScale?.value ?? 0,
-    stageGrow: stageTune?.growGain ?? 0.14,
-    stageFollow: stageTune?.followStiffness ?? 0.14,
-    stageFriction: stageTune?.followDamping ?? 0.65,
-    stageOffset: stageTune?.maxOffset ?? 12,
-    stageReturn: stageTune?.returnGain ?? 0.18,
+    scatterRadius: scatterTune.radius,
+    scatterDistance: scatterTune.distance,
+    scatterReturn: scatterTune.returnSeconds,
+    idleStrength: idleTune.strength,
+    finaleGap: core._finaleGapUniform.value,
+    finaleMode: normalizeFinaleMode(window.__DALA_FINALE_MODE__ ?? u.finaleMode),
     bloomStrength: bloom.strength,
     bloomThreshold: bloom.threshold,
     bloomRadius: bloom.radius,
@@ -179,31 +175,10 @@ function build(GUI: Any, u: Any, gl: Any) {
     .onChange((v: number) => {
       if (u.exFloatUniform) u.exFloatUniform.value = v;
     });
-  parts.add(S, "stageAttract", 0, 1.2, 0.005).name("Магніт блока документа").onChange((v: number) => {
-    if (stageAttract) stageAttract.value = v;
-  });
-  parts.add(S, "stageLift", 0, 2, 0.01).name("Підйом блока документа").onChange((v: number) => {
-    if (stageLift) stageLift.value = v;
-  });
-  parts.add(S, "stageScale", 0, 0.2, 0.005).name("Збільшення блока").onChange((v: number) => {
-    if (stageScale) stageScale.value = v;
-  });
-  parts.add(S, "stageGrow", 0.02, 0.2, 0.005).name("Швидкість збільшення").onChange((v: number) => {
-    if (stageTune) stageTune.growGain = v;
-  });
-  parts.add(S, "stageFollow", 0.02, 0.2, 0.005).name("Пружність магніту").onChange((v: number) => {
-    if (stageTune) stageTune.followStiffness = v;
-  });
-  parts.add(S, "stageFriction", 0.6, 0.95, 0.005).name("Тертя магніту").onChange((v: number) => {
-    if (stageTune) stageTune.followDamping = v;
-  });
-  parts.add(S, "stageOffset", 0, 30, 1).name("Макс. зсув блока (px)").onChange((v: number) => {
-    if (stageTune) stageTune.maxOffset = v;
-    if (stageMaxOffset) stageMaxOffset.value = v;
-  });
-  parts.add(S, "stageReturn", 0.02, 0.2, 0.005).name("Швидкість повернення").onChange((v: number) => {
-    if (stageTune) stageTune.returnGain = v;
-  });
+  parts.add(S, "scatterRadius", 20, 160, 1).name("Радіус розсипання (px)").onChange((v: number) => (scatterTune.radius = v));
+  parts.add(S, "scatterDistance", 0, 200, 1).name("Сила розльоту (px)").onChange((v: number) => (scatterTune.distance = v));
+  parts.add(S, "scatterReturn", 0.3, 2, 0.05).name("Повернення листків (с)").onChange((v: number) => (scatterTune.returnSeconds = v));
+  parts.add(S, "idleStrength", 0, 2, 0.05).name("Сила живого руху").onChange((v: number) => (idleTune.strength = v));
 
   const post = gui.addFolder("Світіння і розмиття");
   post.add(S, "bloomStrength", 0, 1.5, 0.01).name("Bloom сила").onChange((v: number) => (bloom.strength = v));
@@ -220,7 +195,10 @@ function build(GUI: Any, u: Any, gl: Any) {
     bg.add(S, "grainBright", 0, 0.3, 0.001).name("Зерно: яскравість").onChange((v: number) => (grain.u_bright.value = v));
   }
 
-  const finale = gui.addFolder("Фінал папки");
+  const finale = gui.addFolder("Вигляд фіналу");
+  const modeController = finale.add(S, "finaleMode", { "Папка": "folder", "Документ": "document" })
+    .name("Вигляд").onChange((value: FinaleMode) => publishFinaleMode(value));
+  finale.add(S, "finaleGap", 0, 0.12, 0.005).name("Проміжки між аркушами").onChange((v: number) => (core._finaleGapUniform.value = v));
   const folderController = finale
     .add(S, "folderVariant", { "A · Переворот": "a", "B · Розліт": "b", "C · Під’їзд": "c" })
     .name("Варіант")
@@ -229,6 +207,13 @@ function build(GUI: Any, u: Any, gl: Any) {
     S.folderVariant = normalizeFolder((event as CustomEvent<string>).detail);
     folderController.updateDisplay();
   };
+  const syncMode = () => {
+    S.finaleMode = normalizeFinaleMode(window.__DALA_FINALE_MODE__);
+    modeController.updateDisplay();
+    folderController.show(S.finaleMode === "folder");
+  };
+  syncMode();
+  window.addEventListener("dala:finale-mode", syncMode);
   window.addEventListener("dala:folder-variant", onFolderVariant);
 
   const tools = gui.addFolder("Інструменти");
@@ -272,6 +257,7 @@ function build(GUI: Any, u: Any, gl: Any) {
   const destroy = gui.destroy.bind(gui);
   gui.destroy = () => {
     window.removeEventListener("dala:folder-variant", onFolderVariant);
+    window.removeEventListener("dala:finale-mode", syncMode);
     destroy();
   };
   return gui;

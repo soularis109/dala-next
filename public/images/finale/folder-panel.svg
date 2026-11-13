@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="2048" viewBox="0 0 2048 2048"><defs>
+  <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FCFAF5"/><stop offset="1" stop-color="#F1ECE2"/></linearGradient>
+  <linearGradient id="pocket" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#EEE7DA"/><stop offset="1" stop-color="#E4DACA"/></linearGradient>
+</defs><rect x="260" y="90" width="1526" height="1865" rx="18" fill="url(#paper)" stroke="#A6AAA5" stroke-width="6"/><path d="M290 118V1925" stroke="#D6BE93" stroke-width="5"/></svg>

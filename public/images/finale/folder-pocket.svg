@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="2048" viewBox="0 0 2048 2048"><defs>
+  <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FCFAF5"/><stop offset="1" stop-color="#F1ECE2"/></linearGradient>
+  <linearGradient id="pocket" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#EEE7DA"/><stop offset="1" stop-color="#E4DACA"/></linearGradient>
+</defs><path d="M263 1370L1510 1370L1783 1270V1937Q1783 1952 1768 1952H278Q263 1952 263 1937Z" fill="url(#pocket)" stroke="#B8AE9C" stroke-width="6"/>
+    <path d="M282 1386H1514L1764 1294" fill="none" stroke="#D6BE93" stroke-width="5"/>
+    <path d="M292 1410V1923H1755V1330" fill="none" stroke="#D5C9B7" stroke-width="3"/></svg>

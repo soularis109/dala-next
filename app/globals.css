@@ -87,15 +87,34 @@
     bottom: 5.75rem;
     z-index: 1200;
     display: inline-flex;
+    flex-direction: column;
     align-items: center;
     gap: 0.25rem;
     padding: 0.35rem;
     border: 1px solid var(--line);
-    border-radius: 9999px;
+    border-radius: 1.5rem;
     background: var(--canvas-glass);
     box-shadow: var(--header-shadow);
     backdrop-filter: blur(16px);
     pointer-events: auto;
+  }
+
+  .folder-variant-toggle__row {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .folder-variant-toggle__button.folder-variant-toggle__mode {
+    width: auto;
+    min-height: 2.75rem;
+    padding: 0 0.85rem;
+  }
+
+  .folder-finale-stage {
+    height: calc(var(--vh, 1vh) * 100);
+    height: 100svh;
+    pointer-events: none;
   }
 
   .folder-variant-toggle__caption {
@@ -155,6 +174,11 @@
 
 @media (max-width: 767px) {
   .folder-variant-toggle {
+    right: 1rem;
+    bottom: calc(var(--finale-control-bottom, 5.75rem) + env(safe-area-inset-bottom, 0px));
+    max-width: calc(100vw - 2rem);
+  }
+  .folder-variant-toggle__variants {
     display: none;
   }
 }
@@ -183,4 +207,37 @@ html[data-anim-only] .cookie-notice {
 html[data-anim-only] .header .theme-toggle {
   visibility: visible !important;
   pointer-events: auto !important;
+}
+
+/* The complete first scatter (1.8 → 3.4) gets two viewports, including the
+   neighboring section tails and the legacy margin before Document review.
+   The section manager measures that surrounding space on load and resize. */
+.first-scatter-stage {
+  --first-scatter-budget: calc(var(--vh, 1vh) * 200);
+  height: max(1px, calc(var(--first-scatter-budget) - var(--first-scatter-surrounding-space, 0px)));
+}
+
+.first-scatter-stage[data-extra-scatter-screens="true"] {
+  --first-scatter-budget: calc(var(--vh, 1vh) * 400);
+}
+
+@supports (height: 100svh) {
+  .first-scatter-stage {
+    --first-scatter-budget: 200svh;
+  }
+
+  .first-scatter-stage[data-extra-scatter-screens="true"] {
+    --first-scatter-budget: 400svh;
+  }
+}
+
+.first-scatter-stage .manifesto--introduction-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.first-scatter-stage .manifesto--introduction {
+  flex: 1 1 0;
+  min-height: 0;
 }

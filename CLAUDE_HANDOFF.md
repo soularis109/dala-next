@@ -1,6 +1,208 @@
 # Dala document animation — handoff for Claude
 
-Updated: 2026-11-10
+Updated: 2026-11-13
+
+## Speed-aware first-cloud magnet — 2026-11-13
+
+- Slow cursor movement now captures one nearby sheet as soon as a second position supplies a speed sample. The selected sheet follows slow movement, retaining its 1.8× magnetic scale; moving over 3px no longer automatically releases it. A first position only seeds input; a stationary first hover still waits 150ms.
+- Fast motion enters repel at 650 CSS px/s using the raw sample immediately. Return to attract when the exponentially smoothed speed (40ms time constant) falls to 300 px/s; retain the current mode between thresholds. After 150ms without significant movement, return to attract and capture as before. Only repel supplies a fresh swept impulse and releases the captured sheet.
+- Tracker v4 records monotonic movement time and cumulative travel. Paired Pointer/Mouse events at identical coordinates update neither twice; hover events do not supply movement samples. Speed uses the real sampling interval, including slow frames, so rendering delays cannot inflate a gentle approach into a swipe. No cursor path is retained.
+- Existing push radius/strength/cap (45px, 360–520px/s, 640px/s), relative GPU offsets, continuous native animation, intro timing, single runtime and no-click activation remain in place.
+- Verification for this change is limited to TypeScript, targeted ESLint and diff whitespace checks under AGENTS.md. Browser interaction and regression test execution have not been performed for this revision; earlier browser results below describe the earlier behavior.
+
+## Shorter intro tail and enlarged magnetic sheet — 2026-11-13
+
+- Desktop intro duration is now 4.6s. `heroIntroEase` preserves the original show progression for the first 3.85s (through show=0.7), then uses a cubic Hermite tail over 0.75s instead of 1.65s. Tangents match at the join and finish at zero. All four show uniforms share the ease; base yaw composes its original cubic-out with the same progress. The start delay stays intact. Mobile retains 3.2s/linear show, reduced motion retains instant reveal; custom duration proportionally scales the normalized curve.
+- Runtime `defaultIntroDuration` is the shared source for activation and DevTuner's initial duration, replacing the old duplicated 5.5 default. Pure curve checks confirm monotonicity, exact early motion (max error ~1e-16), join 0.7 and endpoint 1; browser sampling confirmed all four show uniforms stay synchronized and the tuner displays 4.6.
+- `HERO_MAGNET_SCALE=1.8` drives `u_heroMagnetScale` in the shared color/depth shader and the projected-face picking scale. Growth follows the existing capture weight; selected papers retain the larger size while held and decay smoothly on release. Only the captured sheet grows. Relative offsets and zero-delta identity remain intact. Magnetic interaction marks its sheet as touched, including for later boundary handling.
+- Sharp browser acceptance passed: synchronized intro uniforms, DevTuner 4.6, zero-delta color/depth parity, no-click sweep, single magnetic sheet, stable enlarged hold and release, untouched sheets unchanged, blur/re-entry/resize and form/reverse/reduced behavior. An isolated native paper rendered at the same magnetic depth measured ~1.86x width / ~1.84x height at 1.8 versus 1.0 scale (raster bounds). New JS/GLSL errors: none; WebGL error zero. QA: `/private/tmp/qa-dala-hero-size-timing.mjs`; image `/private/tmp/dala-continuous-magnet-1p8.png`.
+
+## Continuous native hero with relative interaction — 2026-11-13
+
+This fixes the visible reshuffle after the flight. Runtime initialization was already stable, but the 150ms `u_heroPoseMix` handoff replaced every native GPU center/rotation/scale with a different CPU pose, even without input. That absolute-pose path is now removed.
+
+- Core and foreground keep their original simulation, native flutter/tilt, paper shape, size, phase transitions and `u_time` throughout. `a_heroInteraction` contains only relative CSS-pixel XY displacement, additional view-space spin and magnetic weight. The shared color/depth hook applies them around each native instance center. Zero deltas return the original position/normal directly, so enabling interaction cannot alter untouched papers.
+- Attributes are allocated as zeros before the first frame. There is no absolute-pose attribute, quaternion override, startup blend or independent CPU pose clock. The interaction gate only fades effects on the existing hero-to-form interval; readiness itself introduces no visual transition.
+- `a_heroRank` is prepared before the intro and shared by CPU visibility and the native shader's density test. Existing `a_angle` seeds drive native tilt and picking consistently. Picking uses the original material time, shared native drift parameters, projected face rotations and the same frame transforms. The one-time simulation/scale cache remains for picking only; it never replaces rendered GPU positions.
+- `HeroMotion` still owns impulse velocity, persistent offsets, spin and a single captured sheet. The prior 360–520 px/s impulse, 640 cap, 45px radius, 150ms pause, 100px capture range, braking and no-click input are retained. `hero-motion.cjs` now includes quaternion composition helpers used only by projected-face picking.
+- Sharp desktop browser acceptance passed: no input at readiness gives exactly identical frozen color AND depth buffers with the interaction gate 0 versus 1 (max difference 0, changed components 0). Native papers then respond to a real sweep and single-sheet magnet with zero presses. Untouched papers keep zero deltas; blur, re-entry, resize, form/reverse scroll and live reduced motion pass. No new JS/GLSL errors; WebGL error zero. QA: `/private/tmp/qa-dala-continuous-hero.mjs`; images: `/private/tmp/dala-continuous-{ready,magnet}.png`.
+
+## Single automatic runtime and stable hero lifetime — 2026-11-13
+
+This replaces the synthetic DOMContentLoaded bridge and visual resets on pointer lifecycle events. The client explicitly chose automatic interaction after the initial flight, without any click.
+
+- `ScriptLoader` imports `entry.cjs` and calls the exported `startDala()` directly. `2601.cjs` evaluates its application setup inside a runtime factory, so module reevaluation itself cannot attach duplicate listeners or replace the debug state. A document-wide `window.__DALA_RUNTIME__` owns the shared initialization promise and state. StrictMode/remounts/repeated start calls reuse that promise, renderer, RAF subscription and automatic intro. Native or synthetic DOMContentLoaded no longer starts the engine.
+- The promise resolves after assets/reveal enable the site and schedule the intro. Hero interaction becomes ready automatically once both layers and the intro are ready; pointer information captured before that point is consumed without a press. Debug mode exposes `u.start` and `u.lifecycle` (bootCount, introCount, captures, heroReady). The explicit DevTuner replay remains the only intentional intro restart.
+- Pointer tracker v3 listens only to mouse/pointer over/move, with no button subscriptions. Element blur is ignored; actual window blur/leave invalidates the input. Lifecycle resets now release the magnet and reset its clock without clearing pose blending or reconstructing physical state.
+- Hidden tabs keep the existing controller and attributes. The autonomous hero pose clock and handoff advance only with visible bounded frame deltas, avoiding phase jumps and repeat capture on return. Resize retains the same controller/offsets. Leaving the hero or enabling reduced/coarse/mobile behavior still clears the controller normally; reverse scene entry captures a new cloud after settling.
+- Browser acceptance on the existing server passed sharp desktop: ordinary loader, cursor captured during the intro, automatic magnetic response with zero presses, repeated start returning the same promise, duplicate DOMContentLoaded, native click without any change to renderer/controller/capture count/u_show, blur/re-entry, resize, hidden/visible return, form/reverse scroll and live reduced motion. WebGL error zero; no new JS/GLSL errors. QA: `/private/tmp/qa-dala-runtime.mjs`; before/after-click images: `/private/tmp/dala-runtime-{before,after}-click.png`. The same checks passed current rendering; mobile and initial reduced motion also started automatically with physics disabled and no new JS/GLSL errors.
+
+## Reliable mouse input and pause magnet — 2026-11-13
+
+This replaces the one-second face dwell below. The client selected a 150ms pause, twice the push strength and fast braking when the cursor stops.
+
+- The early self-contained tracker is now version 2. Both PointerEvents and MouseEvents are captured even when `PointerEvent` exists; coordinate-based motion sampling prevents a paired event from doubling an impulse. Touch/pen and compatibility mouse input are ignored. Versioned, disposable subscriptions replace stale HMR snapshots and reset the controller's consumed history. No click or document focus requirement is introduced.
+- `HeroMotion` tracks actual motion sequence changes and `lastMotionAt`. Motion over 3px releases capture and supplies only a fresh swept segment. The controller stays in moving mode for 150ms after the last significant sample, preventing false pauses between events. Click/hover-only coordinate updates can seed a position without producing an impulse.
+- After 150ms of stillness, capture one visible paper within 100 CSS px: prefer the projected face under the pointer (frontmost for overlap), otherwise nearest by distance. Keep that paper locked while stationary, even if inertia/drift carries it out of its initial face hitbox; ease the magnet in over 200ms from `capturedAt`. No nearby paper means no capture.
+- Push speeds are 360–520 CSS px/s with a final 640 cap, radius remains 45px. Moving damping stays 5/s; paused damping is 30/s to brake residual flight over roughly 100ms. New locations and autonomous floating are retained; there is no cursor trail.
+- In-memory checks of the actual CJS sources passed mouse-only activation, paired-event deduplication, upgrade/disposal, touch filtering and pause/capture/release behavior at 30/60/120fps. Browser acceptance is pending: the previously running localhost:3000 server is now stopped, and AGENTS.md requires explicit authorization to start it. No server was started or production build run.
+
+## Individual first-cloud physics, no cursor trail — 2026-11-13
+
+This replaces the trail-based implementation and continuous collective magnet below. The client chose independent papers, persistent new positions after a push, and exactly one magnetic sheet after a one-second dwell.
+
+- `legacy/hero-motion.cjs` owns per-sheet position offsets, velocity, spin, cooldown and magnetic state. Only the current cursor segment can apply an impulse; no spatial cursor history survives. Speeds start at 180–260 CSS px/s, cap at 320, and decay exponentially at 5/s. Integrated offsets remain after velocity decays. A broad viewport boundary acts only on interacted sheets, never restoring their original cells.
+- The root's early pointer tracker stays in place. Click/focus is unnecessary. A 3px cursor tolerance separates jitter from a sweep; a candidate must remain under the projected paper face (8px hysteresis) for 1000ms before magnetic capture, easing over 200ms. Only the frontmost eligible instance across core/foreground is selected. Motion immediately releases it and supplies a new impulse.
+- At full hero readiness, the controller captures the existing simulation position texture once (Float32 or decoded half float) and caches scales once. CPU-generated floating poses, physical offsets, quaternion rotations, mild selected-sheet lift/scale and projected hit quads share two instanced attributes across color/depth. There is no per-frame GPU readback, extra draw call, target, asset or cursor-history shader loop. Recovering the old simulation ID from `a_id` frees the attribute slot required by WebGL's limit.
+- The legacy intro stays in place, with a 150ms handoff to the new poses. Input stops above progress 0.1 and pose weight fades to zero by 0.46; the controller is discarded outside hero. Reverse entry waits for the cloud to settle before a fresh capture. Resize/leave/blur reset dwell; hidden/reduced-motion scenes discard physics. Touch/coarse pointer disables the controller. Form/stamp/folder/VISA keep their existing interaction.
+- Browser QA has passed sharp/current desktop: persistent displacement, 1000ms dwell, exactly one selected paper, release on movement, blur, scroll into form/reverse entry, resize and live reduced motion. WebGL error is zero with no new JS/GLSL errors. Temporary acceptance script: `/private/tmp/qa-dala-hero-physics.mjs`; images: `/private/tmp/dala-hero-physics-{before,sweep,magnet,form}.png`. Mobile and initial reduced-motion acceptance also passed: physics disabled, no new shader errors, WebGL error zero.
+
+## Immediate hero hover with additive scatter — 2026-11-13
+
+This supersedes the moving-cursor magnet mute and magnetic-pause behavior below. Only the first cloud changes; assembled form/stamp/folder/VISA interaction is retained.
+
+- Root layout installs the self-contained `hero-pointer.cjs` tracker with `beforeInteractive`; the engine also installs it idempotently as a fallback. A cached snapshot separates known/inside coordinates, real movement and lifecycle resets. Hover captured during loading seeds core/foreground uniforms at intro completion without a click or fabricated sweep. Unknown position waits for the first real hover; no center fallback.
+- Hero no longer requires `document.hasFocus()`, and magnet weight stays one for valid mouse hover, including movement. Existing attraction 0.72, lift, scale and phase fade remain. Mouse leave, blur, hidden tabs, resize and phase changes clear trails. Touch/coarse pointer and reduced motion disable the effects.
+- To keep the stronger scatter additive to a continuous magnet, the old pre-magnet velocity steering is replaced by a shared post-magnet screen-space displacement in core and foreground color/depth shaders. The base GPU simulation is retained. A bounded 16-segment history coalesces at 80ms, uses 45px radius / up to 50px travel, and an analytic critically damped pulse with a 150ms rise/hold and return to exact zero by 1.15s. The strongest contribution wins, so paths cannot accumulate unlimited displacement. No new FBO, texture or draw call; the tradeoff is a bounded vertex-shader loop.
+- Genuine motion is consumed once; click/up events only update position. Both shader passes see the same uniform arrays and clock. `hero-pointer.test.cjs` covers serialized bootstrap, pre-load hover, no-click activation, valid zero coordinates, motion consumption, click/leave/blur/visibility/resize resets and touch filtering.
+- Targeted first-hover browser acceptance passed on the existing localhost:3000 server using `/private/tmp/qa-dala-hero-first-hover.mjs`: unknown position waits; a real mouse hover captured while the EXR asset is paused activates both layers after loading with zero clicks and `document.hasFocus() = false`; initial seeding creates no sweep; real movement retains the magnet; stationary hover adds no trail; blur/re-entry and live reduced motion reset correctly. WebGL error zero, no new JS/GLSL errors. Screenshot: `/private/tmp/dala-hero-first-hover.png`. This validates first-hover activation, not the older GPU-displacement assertions. Broader visual/mobile acceptance and the Node test runner remain pending.
+
+## Scroll-applied VISA sticker — 2026-11-13
+
+This supersedes standalone VISA appearing during page assembly. The client chose a sticker application driven by further scrolling, with reverse playback on reverse scroll.
+
+- Standalone now assembles a blank page by 6 desktop / 5.8 mobile, holds to 6.2, then applies VISA at 6.2→6.85 desktop / 6.2→6.65 mobile. Folder-mode sticker opacity and the existing section heights are retained. `visaApplication` is a stateless normalized scroll signal; `visaAvailable` waits for the completed application/opening.
+- `visaStickerPose` in `document-motion.cjs` supplies opacity over the first 18%, approach from 108% scale / +0.18 page-unit Y / -2°, contact by 85%, then a hold. Reduced motion uses only an opacity fade over the same interval. There is no automatic playback or elapsed-time clock.
+- Core transforms the existing VISA texture in rest-page coordinates around its actual artwork center, preserving aspect. A procedural rounded-rectangle shadow softens the approach and vanishes at contact. Final UV mapping is the original sticker placement; the artwork continues to move with its underlying tiles. No new meshes, textures or render passes were added.
+- New `u_finaleLayout` follows collection independently of sticker alpha. Full-face selection, tile width/overscan, paper alpha, original-corner shading suppression and depth coverage use it. Core color/depth share the uniform, so the blank final page is already stable before applying the status.
+- Existing floating continues; cursor scatter waits for the completed application and settled sticker pose. Mode changes blend folder identity and standalone pose at the current scroll via the existing 200ms transition.
+- Regression scenarios cover blank hold, application/readiness boundaries, frozen/reversed/fast scroll targets, mode blending, clamped pose endpoints and reduced motion. Browser/WebGL visual acceptance and the Node test runner remain unrun under the lightweight-only AGENTS.md rule.
+
+## Hero cursor scatter with magnetic pause — 2026-11-13
+
+The first cloud now scatters softly along a moving cursor, then restores the existing magnet after a pause. The client selected the same restrained radius/travel as the form.
+
+- `_updateHeroInteraction` tracks its own consumed cursor segment and clock, independent of the assembled-page scatter. Movement over 0.5 CSS px mutes the hero magnet; after 150 ms idle, `u_heroMagnetWeight` smoothly returns to one over 200 ms. The existing 0.72 attraction, lift and scale use this shared color/depth weight.
+- The existing GPU velocity pass receives a swept screen-space segment, 45 px radius and up to 25 px target offset. Damped local steering and the original spring/friction return the papers toward their cloud positions in roughly a second. No new render target, pass, draw call or per-frame CPU readback is added.
+- The velocity pass projects current simulated centers with the rendering view/projection matrices and mirrors the hero's random drift/seeded depth. The unused YZW channels of `t_params3` carry the visible instances' `a_random.xyz`; X still controls later explosion. New material uniforms are appended to preserve indexed uniform access.
+- Input starts after the intro show settles and fades over raw/eased hero progress 0.1–0.46. Leaving the hero, blur/mouseleave and resize clear the segment; stationary scrolling cannot inject impulses. Touch, coarse pointers, live reduced motion and hidden/unfocused documents disable the interaction.
+
+- Browser acceptance passed on the existing localhost:3000 server: sharp/current desktop, mobile and initial/live reduced motion; actual GPU displacement, moving/stationary cursor, magnetic recovery, forward/reverse scroll, resize, touch and leave resets. No new shader/JS errors; WebGL error zero. Temporary QA: `/private/tmp/qa-dala-hero-scatter.mjs`; screenshots: `/private/tmp/dala-hero-scatter-{sharp,current,mobile,reduced}-{before,active,settled}.png`. No build or dev-server restart.
+
+## Two finale views — 2026-11-13
+
+The client selected folder as the default and a larger standalone VISA alternative, using the earlier stamped-page scale.
+
+- `app/lib/finaleControls.ts` owns the typed client publisher for `?finale=folder|document`, `window.__DALA_FINALE_MODE__` and `dala:finale-mode`. The visible final-stage panel and DevTuner share it; URL reload/popstate are supported. Existing `folder=a|b|c`, `docs` and other query parameters remain independent. A/B/C is retained and hidden in document mode; mobile exposes the two view buttons above the footer bar.
+- `documentTimeline` accepts `finaleMode` (default folder) plus an optional numeric `finaleMix` for the 200ms transition. Numeric standalone-frame, VISA availability and idle weights remove dependencies on opening a hidden folder. Earlier scenes are unchanged. Standalone collects directly at the existing finale interval, stays visible, and holds over the existing opening stage without changing section heights.
+- Desktop standalone ends at x=-3.2, y=0, factor=4.65. Mobile starts from the earlier factor=3 and fits above the measured footer with space reserved for idle motion. Color/depth consume the same frame and visibility uniforms.
+- Current-scroll switching uses the existing frame clock, clears both cursor histories/springs and gates interaction until framing settles. Standalone bypasses the pocket mask. Reduced motion snaps the frame/mode instead of animating the switch; ordinary mobile retains half idle without hover scatter.
+- Added timeline regression scenarios for direct collection, default/invalid modes, previous-scene equality, A/B/C preservation and reversible blend endpoints. Browser/WebGL acceptance and the Node test runner remain unrun under AGENTS.md's lightweight-only verification rule.
+
+## Live folder and VISA interaction — 2026-11-13
+
+This supersedes the stable, non-interactive finale below. The client selected the form's floating/rocking motion for the closed folder, then only the VISA page after opening.
+
+- `document-motion.cjs` shares the existing idle pose, cursor impulse and critically damped return formulas between core and folder. Core retains its form/stamp gating and adds fully open, settled VISA; each stage/grid has separate pointer history and clears springs on transitions. Folder receives its own move/leave/resize events.
+- `u_finaleGap` (default 0.04) shrinks settled cells around unchanged centers in all folder layers and the final page. Core color/depth use the same vertex shader and gap uniform. UVs, particle counts and complete faces are retained. DevTuner exposes the gap with copy/reset; existing idle/scatter controls also serve the finale.
+- Closed-folder idle enters over the final 5% of assembly and fades at progress 6.1→6.2. Only the exterior cover scatters after assembly. VISA idle enters over the final 10% of opening; VISA scatter waits for full opening, visible/settled paper. The open folder subtracts the page-only idle transform and remains still.
+- Cover and pocket alpha masks are cached once at 256px from existing textures. Projected cover picking ignores transparent margins. VISA picking ignores cells and cursor segments behind the pocket. No per-frame image readback, new assets, FBOs or render passes.
+- Mobile halves idle and disables scatter; live reduced-motion disables both. New helper regression scenarios cover strength, swept paths, deterministic travel limits and exact spring return. Browser/WebGL acceptance and the Node test runner remain unrun under the lightweight-only AGENTS.md rule.
+
+## Cursor scatter on the stamped page — 2026-11-13
+
+The completed stamp page now shares the second-stage form's cursor scatter. This supersedes the separate ink plane described below.
+
+- `documentScatterWeight` preserves the form window and adds 3.65→4.6 after `StampPlayback` is done and the page is assembled. It fades on 4.5→4.6. The same 45px radius / 25px travel / 15° tilt / 0.10 depth / 150ms pause / ~1s return and DevTuner controls serve both scenes. Touch/coarse pointers, reduced motion, focus checks and mousemove-only activation are retained.
+- The core's existing attributes and springs are reused. Inactive stages and direct jumps between pages clear displacement and cursor history. Reverse entry permits interaction after settling; returning to the preceding cloud rearms the automatic stamp first.
+- The ink is composited into `pMaster` via rest-page UVs, before mosaic/paper shading. A shared `STAMP_PLACEMENT` gives the body and inverse UV mapping the same center, size and angle. Timed ink opacity uses a shared core uniform, zero outside the stamp scene. The separate mark mesh/material is removed, so each ink fragment moves with its actual tile and color/depth stay aligned.
+- Assets, automatic top-down pressing, scroll length, existing form idle motion and folder behavior are retained. Regression cases cover completion gating, fades, unsettled paper, reverse entry and replay. The single final batch passed `npx tsc --noEmit` and targeted CJS ESLint (no-unreachable/no-duplicate-case/no-unexpected-multiline) for the three changed code files. Node test runner and browser/WebGL QA were not run under the lightweight-only rule.
+
+## Shared finale paper relief — 2026-11-13
+
+The client selected the earlier form/stamp paper style for the whole folder composition, with a stable final frame and no cursor scatter.
+
+- `paperMicroReliefDecl` supplies one shared GLSL function for the VISA page and all instanced folder layers. It adds directional edge shading, the existing document-corner shadow profile, a shaded fold and restrained deterministic tone variation after the printed artwork is sampled, before the shared color grade. Navy and ivory retain their palette through multiplicative shading.
+- Core's internal `u_finalePaper` eases toward the existing `timeline.finale`, independently of VISA sticker opacity. Earlier scenes target zero relief; folder relief follows each cell's existing settle weight. No new timers or scroll phases were introduced.
+- Complete per-instance faces, UVs, alpha/depth coverage, particle counts, assets, A/B/C entrance and opening transforms are retained. `?foldersheets=0` remains the flat comparison. No cursor interaction was added to the finale.
+- Visual acceptance remains pending: closed folder, opening midpoint, open VISA frame, reverse scroll, A/B/C, mobile and reduced motion. Verification is limited to targeted ESLint under AGENTS.md; no production build or dev-server launch/restart.
+
+## Assembled-form idle float — 2026-11-13
+
+The client selected subtle whole-page floating and rocking while the second-scene form holds, alongside the approved cursor scatter.
+
+- `an._applyFormIdle(time)` uses the existing GSAP frame clock (seconds): horizontal ±2 CSS px / 8s, vertical ±5 CSS px / 6s, X tilt ±0.6° / 8s, Y tilt ±0.8° / 10s, Z tilt ±0.3° / 7s. All tiles move rigidly together. No geometry deformation, shader changes, extra FBOs or draw calls were added.
+- Smooth scroll envelopes enter at 0.95→1.05 and exit at 1.7→1.8. Phase is never restarted on re-entry. Mobile halves all amplitudes; live reduced-motion disables the addition immediately. Strength zero also removes the addition immediately.
+- The previous frame's idle offset/rotation is subtracted before the scroll base eases; the new idle transform is added afterwards. This prevents cumulative drift and leaves no idle residue in stamp/folder stages. CSS pixels convert to view units using the current center depth and camera projection, independent of viewport size and DPR.
+- Color and depth receive exactly the same final offset/rotation. The existing cursor projection reads those transforms after idle is applied, preserving the 45px / 25px / 15° scatter. Stationary pointers still cannot inject scatter.
+- DevTuner reads `_idleTune.strength` (default 1), exposes “Сила живого руху” at 0–2 in steps of 0.05, and includes it in the existing copy/reset flow.
+- Acceptance scenarios: idle hold, moving/stationary cursor, forward/reverse boundary crossings, resize, strength zero/reset, mobile half amplitude and live reduced-motion. Visual/browser acceptance remains to be confirmed. The single final batch passed TypeScript, targeted DevTuner ESLint, syntax-oriented bundle ESLint (no-unreachable/no-duplicate-case/no-unexpected-multiline), and diff whitespace checks under AGENTS.md.
+
+## Top-down stamp contact — 2026-11-13
+
+This supersedes the side-view sprite, billboard, XY travel and 3% Y compression in the earlier automatic-stamp entry. The client selected a stamp viewed from above to match the frontal document.
+
+- `npm run assets:stamp-body` retains the S-01 cutout and generates `public/images/stamp-body-top.svg` plus `.png`. The new navy/champagne body has a circular base and compact central handle. Its 1024px canvas matches the unchanged ink texture; the base radius is derived from all nonzero-alpha ink pixels plus a small cover margin. Do not trim this new PNG.
+- Runtime `stamp_body` loads the new PNG. Body and mark now use the same centered square geometry, local anchor, fixed angle and page-space vertex shader. Their contact scale is 1.4; the body renders over the ink. The old bottom-edge translation, camera-facing shader and XY offsets are removed.
+- `stampPose` now returns `{ scale, opacity, ink }`. The 1.2s cycle appears at uniform scale 1.12 through 0.35s, presses to 1.0 at 0.5s, holds until 0.65s, then grows toward 1.12 while fading out. Ink forms underneath during contact. Playback state, replay/fast-scroll handling and the 150ms reduced-motion ink fade are preserved.
+- Regression scenarios now cover one scale minimum, no position/Y-squash outputs, full coverage during contact and continuous scale. The generated asset has been inspected directly; browser/WebGL alignment still requires visual confirmation. The single final verification batch passed: `npx tsc --noEmit`, generator ESLint, and syntax-oriented ESLint for the three modified CJS files. The Node test runner was not run under the lightweight-only rule in AGENTS.md.
+
+## Two-screen scatter and automatic 2D stamp — 2026-11-13
+
+This supersedes the first-cloud duration and the two scroll-driven presses below.
+
+- `ManifestoIntro` keeps the extra two paragraph panels behind `SHOW_EXTRA_SCATTER_SCREENS = false`. Flip it to restore them and a four-screen budget. The active first scatter, from progress 1.8 to 3.4, gets 200svh including the neighboring section tails and the legacy review margin. `Sn.fitFirstScatter` measures those portions on load/resize; the font-ready pass repeats the measurement before building scroll triggers. The compact section's progress includes the following margin to prevent premature assembly. Section indices and later scene targets remain intact.
+- `legacy/document-stamp.cjs` owns the idle/playing/done state and a single 1.2-second press, independent of scrolling after the document has settled. Fast forward completes the imprint, reverse entry keeps it, and returning below 3.4 rearms playback. Visibility changes pause the clock; resizing does not reset it. Reduced motion uses a 150ms ink fade, and live preference changes preserve the cycle fraction.
+- `Stamp` uses the existing sprite and imprint textures. Its billboard shader adds XY offsets at fixed anchor depth and a fixed angle; the one contact compresses the artwork by at most 3%. The moving shadow, depth flight, wobble, second press and paper impact are disabled. The imprint fades with the existing second scatter.
+- Meaningful regression cases live in `legacy/document-stamp.test.cjs`; the old timeline test now describes a stable page during the automatic cycle. The single final validation batch passed: `npx tsc --noEmit`, targeted TSX ESLint, and syntax-oriented ESLint for the modified/new CJS files (no-unreachable, no-duplicate-case, no-unexpected-multiline). Browser/WebGL QA and the Node test runner have not been run under the current lightweight-only rule.
+
+## Assembled-form cursor scatter — 2026-11-13
+
+This supersedes the semantic-block hover and its overlay visibility fix below. The client selected local scatter along the moving cursor, return after stopping, and replacement of the old block magnet.
+
+- Core now moves its actual 40×40 tiles through `a_stageScatter` (XYZ offset and signed rotation), after grid lock. Color and depth share `tn`; tile UVs stay attached to their original master-form fragments. The overlay mesh/material and region picking were removed.
+- `_updateStageScatter` projects rest-cell centers to CSS pixels and tests the swept mouse segment clipped to the original page. Per-cell typed arrays hold targets, displacement, velocity and last-hit time. A critically damped, time-based spring moves the cells out and restores exact zero after settling. No extra FBO, draw call, asset regeneration or DOM animation is needed.
+- Defaults softened after client review: radius 45 CSS px, travel up to 25 px (speed/falloff weighted), tilt up to 15°, depth up to 0.10 page units. These replace the original 80 px / 120 px / 40° / 0.35 settings, which opened too large a hole in the form. Return starts 150 ms after each cell's last hit and completes in about one second. DevTuner reads the runtime defaults for its radius/travel/return controls, including copy/reset.
+- Interaction is restricted to assembled form progress 1→1.8, fades on 1.7→1.8, and clears outside that stage. Pointer coordinates are consumed only after mousemove, so scrolling under a stationary cursor cannot trigger scatter. Mouseleave/blur and resize reset the previous pointer. Touch, coarse pointers and reduced motion disable scatter; changing reduced motion clears it immediately.
+- Desktop headless Chrome verified visible displacement (321 affected cells in the sampled sweep), exact return to the grid, no stationary retrigger, reverse scroll, mouseleave and live reduced-motion reset. WebGL error is zero; no new shader/JS errors. Screenshots: `/private/tmp/dala-scatter-{before,active,returned}.png`. Existing favicon/manifest 404 and fullscreen-triangle bounding-sphere warnings remain unrelated. Mobile form/stamp/finale also passed with scatter disabled and WebGL error zero. Final TypeScript, bundle syntax and diff whitespace checks passed.
+
+## Assembled-form hover visibility fix — 2026-11-13
+
+The selected-block overlay material must have `depthTest = false` and `depthWrite = false`, retaining render order 3. Browser diagnosis confirmed that picking, spring activation and GPU uniforms worked while depth testing hid the animated copy behind the base page. A controlled browser experiment made the block visible by disabling only that depth test. Keep the existing 12% growth, 0.8 attraction, 30 CSS-pixel target tether and original-region hit testing. See the latest hover entry in `docs/animation-scenario.md` for verification.
+
+## Folder assembly and opening — 2026-11-13
+
+This update supersedes the earlier single-step finale. The client retained the light cover and visa document, requested lightly visible mini-document seams, a distinct closed-folder stage, and a Deep Navy panel only behind the document.
+
+- A full-viewport `.folder-finale-stage.js-section` precedes the footer. Earlier section indices remain 0–5; the new stage is 6 and footer is 7. The A/B/C switcher covers the entrance, new stage and footer.
+- `documentTimeline` now supplies `folderAssemble`, `folderEnter`, `folderOpacity`, `folderBurst`, `folderOpen`, `visaReveal`, and `documentVisibility`. Folder and main document consume this one reversible scroll signal. Collection remains 5.5→6 desktop / 5.5→5.8 mobile. The closed folder holds to 6.2; opening is 6.2→6.85 desktop / 6.2→6.65 mobile, then holds through the footer.
+- A/B/C affect closed-folder entrance only. B bursts folder instances, never the enclosed visa page. Mobile uses C; reduced motion suppresses entrance travel, burst and piece flight while retaining the closed/open sequence.
+- The original document-core geometry supplies each folder piece. Rectangular grids (48×34 desktop / 35×25 mobile per layer) preserve paper proportions near the former instance budget. Edges receive subtle shading. `documentMosaicGeometry` adds a complete face to each existing GLB instance; the source silhouette is used in flight, and the complete face at settle prevents corner pinholes. The final visa page uses that same face and becomes opaque, with its source fold shading suppressed and tile overscan reduced. Earlier form/stamp appearances retain the source GLB. IDs remain deterministic and every piece remains independently addressable.
+- `assets:finale` adds `folder-back-panel` with Deep Navy `#041E42`; `folder-panel` remains ivory on the opening cover. Outside/inside cover meshes switch explicitly at the hinge midpoint, avoiding mirrored exterior printing on the inside.
+- The main page prepares its visa before opening and uses shared color/depth visibility to stay hidden while the folder enters. Cloud visibility returns when scrolling back below assembly. Existing form/stamp scenes and final framing are retained.
+- Latest verification results are recorded in the animation-scenario journal.
+
+## Finale appearance — 2026-11-13
+
+- The client selected a light ivory folder and a visa sticker over the existing v2 form. This supersedes historical descriptions of a navy folder and VISA letters made from recolored particles.
+- `npm run assets:finale` deterministically creates SVG/PNG surfaces under `public/images/finale/`, preserving the original designer assets. The transparent A4 visa overlay uses path lettering (no font dependency), champagne border and abstract data rows; desktop loads 4096px, mobile 2048px.
+- The main mosaic keeps sampling `master_form` in the finale. `t_visa` now samples the RGBA overlay in the same page UV space; `u_visaReveal` fades only the sticker after assembly (5.92→6 desktop, 5.76→5.8 mobile). It no longer recolors the page. The old color-map generator output remains on disk but is unused at runtime.
+- Folder layers clone the main formation's document-core geometry, with deterministic cell seeds, atlas print while flying, and surface UVs when settled. Grid density stays 40×40 / 30×30. Folder and main document use the same color-grading helper and live paper uniforms. Flight stays flat and scroll-driven; A/B/C, mobile C and reduced motion are retained.
+- The shallow pocket renders in front of the lower page (order 25), below the visa overlay region; the hinged cover remains above it. `?foldersheets=0` retains a flat light-surface comparison.
+- Browser verification and targeted lint results are recorded in the latest animation-scenario journal entry.
+
+## Current choreography — 2026-11-13
+
+This update supersedes the earlier timelines, including step 13's restoration of streams. The client has now removed the five-stream scene completely. The current sequence is hero → form → scatter/float → stamp document → scatter/float → open folder/VISA. The final frame holds; A/B/C remain available.
+
+- `legacy/document-timeline.cjs` is the shared desktop/mobile scroll target function. Core color/depth passes and both FBO simulations use the same formation/explosion values. No one-shot timers were added.
+- Timeline: form assembles 0→1, holds to 1.8; scatters 1.8→2.2 and floats continuously to 3.4; stamp document assembles 3.4→3.65, holds through both presses and the imprint to 4.6; scatters 4.6→4.95, floats to 5.5; finale collects 5.5→6 (mobile 5.8). Section heights are unchanged.
+- The four-bank texture format is preserved. Banks 2 and 3 now contain identical flat stamp-page positions, scales and colors; all stream generation and timeline parameters are removed. Formation progress goes directly from 1 to 3 during stamp assembly. Regenerate the uncompressed EXR and companion PNGs with `npm run assets:documents` when editing the generator.
+- Both transition clouds share the existing tumble, depth variation and time-driven drift. Reduced motion keeps explosion ≤0.12 and suppresses the added tumble/drift.
+- The stamp arrives from 3.6; presses remain at 3.92 and 4.15, departure ends at 4.42. The imprint fades with the breaking paper after 4.6. Folder/VISA final positions, colors and A/B/C remain intact.
+- The former `Document flows` section is titled `Document review`; its layout and placeholder paragraphs are unchanged.
+- Assembled-form hover: each of the six existing semantic regions grows by 12% and follows the pointer with the existing spring. Attraction is 0.8 and the target tether is 30 CSS px (~24 px visible center travel); DevTuner reads these runtime defaults and resets to them. Picking stays tied to the original region, releasing on exit and finishing its return before another region activates. Touch/reduced-motion remain disabled. See step 15 for acceptance scenarios and verification limits.
+- Regression scenarios in `legacy/document-timeline.test.cjs` reflect the two remaining transitions. Current verification details are in step 14 of `docs/animation-scenario.md`; earlier browser QA is historical and does not validate this removal.
 
 ## Current implementation update — 2026-11-10
 
@@ -844,3 +1046,11 @@ npx next build --webpack
 - «Обробка» (3.3→5.0): документ більше не лежить під нахилом. `rotX`, `rotY`, `rotZ` на 3.3–3.5 прибрано; печатка опускається зверху-збоку в площині кадру (`Stamp.update`, `HIGH = 1.6`, `swoop` по y = 2.2).
 - Папка у фіналі: листки плоскі (без затінення сторін і z-підйому, пружне замикання ease-out-back). Переворот варіанта A і відкриття обкладинки ортографічні: масштаб по x замість 3D-шарніра. Варіант B пульсує в площині кадру.
 - Детальний журнал і перевірки — `docs/animation-scenario.md`, розділ 5, «Крок 11».
+
+Final runtime acceptance also passed on the plain `/` URL without diagnostic parameters: zero-press activation, unchanged scene after a native click, stable blur/resize/visibility lifecycle and WebGL error zero.
+
+Current render also passed exact frozen color/depth parity (max difference 0). Mobile and initial reduced motion passed with interaction disabled. Final TypeScript, targeted CJS ESLint and diff whitespace checks passed.
+
+The final magnetic scale is uniform XYZ about the native center (not view XY alone), preserving tilted-sheet proportions. Current-render acceptance passed the full flow and measured ~1.86x width / ~1.78x height at a fixed magnetic depth. Mobile and initial reduced motion also passed.
+
+Final uniform-XYZ sharp acceptance passed too (~1.86x width / ~1.82x height in the isolated fixed-depth sample); TypeScript, targeted ESLint and diff whitespace checks passed. No production build or dev-server restart.

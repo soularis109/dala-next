@@ -8,6 +8,7 @@
     "build:pages": "node scripts/build-github-pages.mjs",
     "start": "next start",
     "lint": "eslint",
+    "assets:finale": "node scripts/generate-finale-assets.mjs",
     "assets:document-v2": "node scripts/export-document-v2.mjs",
     "assets:documents": "node scripts/generate-document-particles.mjs",
     "assets:atlas": "node scripts/generate-document-atlas.mjs",

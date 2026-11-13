@@ -30,7 +30,7 @@ export default function Page() {
           <ManifestoIntro />
           <ManifestoBlock
             align="items-end@md"
-            title="Document flows"
+            title="Document review"
             paragraphs={[
               "Your documents move into a structured queue, keeping every file visible as it enters the review process.",
               "Each item follows the same clear route, so nothing is lost between submission, verification and decision.",
@@ -47,6 +47,7 @@ export default function Page() {
             ]}
           />
           <TeamInvestors />
+          <div className="folder-finale-stage js-section" section-name="folder" aria-hidden="true" />
           <Footer />
           <div style={{ position: "absolute", left: 0, bottom: "-1px", width: "2px", height: "2px" }}></div>
         </main>

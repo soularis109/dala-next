@@ -1,8 +1,29 @@
+// One runtime per document, including StrictMode and Fast Refresh remounts.
+function startDala() {
+  if (window.__DALA_RUNTIME__) return window.__DALA_RUNTIME__.promise;
+  const runtime = { status: "starting", state: null,
+    lifecycle: { bootCount: 1, introCount: 0, captures: 0, heroReady: false }, promise: null };
+  window.__DALA_RUNTIME__ = runtime;
+  runtime.promise = Promise.resolve().then(() => createDalaRuntime(runtime)).catch(error => {
+    runtime.status = "error";
+    throw error;
+  });
+  return runtime.promise;
+}
+module.exports = { startDala };
+
+function createDalaRuntime(runtime) {
 require("./3948.cjs");
 require("./285.cjs");
 var i = require("./1138.cjs");
 var r = require("./7542.cjs");
 var o = r;
+const { documentPhases, documentTimeline, normalizeFinaleMode } = require("./document-timeline.cjs");
+const { StampPlayback, documentScatterWeight, STAMP_PLACEMENT } = require("./document-stamp.cjs");
+const { smooth: paperSmooth, idlePose, visaStickerPose, stepScatterCell, cursorImpulse } = require("./document-motion.cjs");
+const { installHeroPointer, consumeHeroPointer } = require("./hero-pointer.cjs");
+installHeroPointer(window);
+const { HERO_INTRO_DURATION, HERO_MAGNET_SCALE, heroIntroEase, HeroMotion, hash: heroHash, quaternion: heroQuaternion, multiplyQuaternion: heroMultiply, axisQuaternion: heroAxis } = require("./hero-motion.cjs");
 const s = window.navigator.userAgent;
 const a = o(s);
 const l = s.match(/(iPad)/) || navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
@@ -13,22 +34,12 @@ function normalizeFolderVariant(e) {
 function normalizeDocumentRenderMode(e) {
   return e === "current" ? "current" : "sharp";
 }
+const initialFinaleMode = normalizeFinaleMode(new URLSearchParams(window.location.search).get("finale"));
 const initialFolderVariant = normalizeFolderVariant(new URLSearchParams(window.location.search).get("folder"));
 const initialDocumentRenderMode = normalizeDocumentRenderMode(new URLSearchParams(window.location.search).get("docs"));
 const sharpDocuments = initialDocumentRenderMode === "sharp";
 const folderSheets = new URLSearchParams(window.location.search).get("foldersheets") !== "0"; // ?foldersheets=0 = old flat folder planes
 const defaultDocumentMagnetStrength = 0.72;
-const defaultAssembledDocumentMagnetStrength = 0.76;
-const defaultAssembledDocumentLift = 0.02;
-const defaultAssembledDocumentScale = 0.08; // whole semantic block grows around its center
-const assembledDocumentHoverRegions = [
-  { id: "header", x: 58, y: 56, width: 724, height: 208 },
-  { id: "personal", x: 56, y: 326, width: 724, height: 138 },
-  { id: "contact", x: 56, y: 488, width: 724, height: 138 },
-  { id: "review", x: 56, y: 650, width: 724, height: 138 },
-  { id: "options", x: 56, y: 810, width: 724, height: 144 },
-  { id: "approval", x: 56, y: 1010, width: 724, height: 130 }
-];
 var u = {
   html: document.documentElement,
   body: document.body,
@@ -73,9 +84,34 @@ var u = {
   enableLogs: new URLSearchParams(window.location.search).has("logs"),
   reducedMotion: reducedMotionQuery.matches,
   folderVariant: initialFolderVariant,
+  finaleMode: initialFinaleMode,
+  finaleModeMix: initialFinaleMode === "document" ? 1 : 0,
+  finaleTransition: null,
   documentRenderMode: initialDocumentRenderMode,
+  defaultIntroDuration: a.features.mobile && !l ? 3.2 : HERO_INTRO_DURATION,
   documentMotionTarget: reducedMotionQuery.matches || window.matchMedia("(max-width: 767px)").matches ? 0 : 1
 };
+window.__DALA_FINALE_MODE__ = initialFinaleMode;
+window.addEventListener("dala:finale-mode", e => {
+  const next = normalizeFinaleMode(e.detail);
+  window.__DALA_FINALE_MODE__ = next;
+  if (next === u.finaleMode) return;
+  u.finaleMode = next;
+  const target = next === "document" ? 1 : 0;
+  const core = u.WebGL?._cones;
+  if (core?._loaded) {
+    core._clearStageScatter();
+    core._scatterStage = null;
+    core._snapFinaleMode = u.reducedMotion;
+  }
+  u.WebGL?._folder?.onMouseleave();
+  if (u.reducedMotion) {
+    u.finaleModeMix = target;
+    u.finaleTransition = null;
+  } else {
+    u.finaleTransition = { from: u.finaleModeMix, to: target, start: performance.now() };
+  }
+});
 window.__DALA_FOLDER_VARIANT__ = initialFolderVariant;
 window.addEventListener("dala:folder-variant", e => {
   const t = normalizeFolderVariant(e.detail || window.__DALA_FOLDER_VARIANT__);
@@ -86,7 +122,12 @@ reducedMotionQuery.addEventListener("change", e => {
   u.reducedMotion = e.matches;
   if (e.matches) u.documentMotionTarget = 0;
 });
-if (u.enableLogs || new URLSearchParams(window.location.search).has("tune")) window.__DALA_DEBUG__ = u;
+runtime.state = u;
+if (u.enableLogs || new URLSearchParams(window.location.search).has("tune")) {
+  window.__DALA_DEBUG__ = u;
+  u.lifecycle = runtime.lifecycle;
+  u.start = startDala;
+}
 function c() {
   if (!(this instanceof c)) {
     return new c();
@@ -3451,22 +3492,25 @@ var Ot = {
     url: u.isMobile ? "/assets/document/document-v2-2048.png" : "/assets/document/document-v2-4096.png"
   }, {
     id: "document_visa",
-    url: "/images/document-visa-colors.png"
+    url: u.isMobile ? "/images/finale/visa-overlay-2048.png" : "/images/finale/visa-overlay-4096.png"
   }, {
     id: "stamp_mark",
     url: "/assets/stamp/stamp-impression-alpha.png"
   }, {
     id: "stamp_body",
-    url: "/images/stamp-body.png"
+    url: "/images/stamp-body-top.png"
   }, {
     id: "folder_cover",
-    url: "/assets/folder/folder-cover-alpha.png"
+    url: "/images/finale/folder-cover.png"
   }, {
     id: "folder_pocket",
-    url: "/assets/folder/folder-pocket-alpha.png"
+    url: "/images/finale/folder-pocket.png"
+  }, {
+    id: "folder_back_panel",
+    url: "/images/finale/folder-back-panel.png"
   }, {
     id: "folder_panel",
-    url: "/images/folder-panel.png"
+    url: "/images/finale/folder-panel.png"
   }, {
     id: "document_position_exr",
     url: "/images/document-positions.exr"
@@ -3573,13 +3617,52 @@ function Nt(e, t) {
     height: i
   };
 }
+// Relative interaction only: zero deltas preserve the original GPU animation exactly.
+const heroInteractionUniforms = {
+  u_heroInteractionWeight: { value: 0 },
+  u_heroMagnetScale: { value: HERO_MAGNET_SCALE },
+  u_heroScreen: { value: new i.F(u.window.w, u.window.h) }
+};
+const heroInteractionDecl = `
+attribute vec4 a_heroInteraction;
+attribute float a_heroRank;
+uniform float u_heroInteractionWeight;
+uniform float u_heroMagnetScale;
+uniform vec2 u_heroScreen;
+vec2 heroSpin(vec2 v, float angle) {
+  float c=cos(angle), s=sin(angle);
+  return vec2(c*v.x-s*v.y,s*v.x+c*v.y);
+}
+vec3 heroInteractionNormal(vec3 n) {
+  float angle=a_heroInteraction.z*u_heroInteractionWeight;
+  if(angle==0.0)return n;
+  return vec3(heroSpin(n.xy,angle),n.z);
+}
+vec4 heroInteractionPosition(vec4 position, vec4 center) {
+  vec4 effect=a_heroInteraction*u_heroInteractionWeight;
+  if(all(equal(effect,vec4(0.0))))return position;
+  vec3 relative=position.xyz-center.xyz;
+  relative.xy=heroSpin(relative.xy,effect.z);
+  relative*=1.0+(u_heroMagnetScale-1.0)*effect.w;
+  float depth=center.z+effect.w*0.3;
+  center.xy*=depth/center.z;
+  center.z=depth;
+  center.xy+=vec2(effect.x,-effect.y)*(-2.0*depth)/(vec2(projectionMatrix[0][0],projectionMatrix[1][1])*u_heroScreen);
+  return vec4(center.xyz+relative,position.w);
+}
+`;
+function attachHeroInteraction(geometry, count) {
+  geometry.setAttribute("a_heroInteraction", new kt.l(new Float32Array(count*4),4));
+  geometry.setAttribute("a_heroRank", new kt.l(new Float32Array(count),1));
+}
 var Vt = "#define GLSLIFY 1\nmat4 rotationMatrix(vec3 axis, float angle)\n{\n    axis = normalize(axis);\n    float s = sin(angle);\n    float c = cos(angle);\n    float oc = 1.0 - c;\n    \n    return mat4(oc * axis.x * axis.x + c,           oc * axis.x * axis.y - axis.z * s,  oc * axis.z * axis.x + axis.y * s,  0.0,\n                oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c,           oc * axis.y * axis.z - axis.x * s,  0.0,\n                oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c,           0.0,\n                0.0,                                0.0,                                0.0,                                1.0);\n}\n";
 var Gt = "#define GLSLIFY 1\nmat4 rotMat = rotationMatrix(vec3(a_angle.x, a_angle.y, a_angle.z), mod(a_angle.w * u_time * 0.15, 3.1416 * 2.));\nvec4 mvPosition = vec4( transformed, 1.0 );\n\nv_color = a_color;\n\n#ifdef USE_INSTANCING\n  mat4 instanceMat = instanceMatrix;\n\n  float zFactor = map(instanceMat[3][2], 0., 9., 0.5, 0.2);\n\n  instanceMat[3][0] = instanceMat[3][0] * u_resolution.x * zFactor - u_mouse.x * a_param.x + sin(u_time * a_param.w * 0.5) * a_param.y * 0.15;\n  instanceMat[3][1] = instanceMat[3][1] * u_resolution.y * zFactor - u_mouse.y * a_param.x + cos(u_time * a_param.w * 0.5) * a_param.z * 0.15;\n  instanceMat[3][2] = instanceMat[3][2];\n\n  instanceMat[0][0] = instanceMat[0][0] * u_scale;\n  instanceMat[1][1] = instanceMat[1][1] * u_scale;\n  instanceMat[2][2] = instanceMat[2][2] * u_scale;\n\n  instanceMat *= rotMat;\n\n\tmvPosition = instanceMat * mvPosition;\n#endif\n\nmvPosition = modelViewMatrix * mvPosition;\ngl_Position = projectionMatrix * mvPosition;";
+Gt = Gt.replace("gl_Position = projectionMatrix * mvPosition;", "mvPosition = heroInteractionPosition(mvPosition, modelViewMatrix * vec4(instanceMat[3].xyz,1.0));\ngl_Position = projectionMatrix * mvPosition;");
 var Wt = "#define GLSLIFY 1\nfloat map(float value, float min1, float max1, float min2, float max2) {\n  return min2 + (value - min1) * (max2 - min2) / (max1 - min1);\n}\n";
 Gt = Gt.replace("mat4 rotMat = rotationMatrix(vec3(a_angle.x, a_angle.y, a_angle.z), mod(a_angle.w * u_time * 0.15, 3.1416 * 2.));", "float motionBlend = clamp(u_motion, 0., 1.);\nfloat calmFlutter = sin(u_time * (0.2 + a_param.w * 0.25) + a_angle.w * 6.2831) * 0.12;\nfloat livelyFlutter = sin(u_time * (0.72 + a_param.w * 0.8) + a_angle.w * 9.7) * 0.34 + cos(u_time * 0.43 + a_angle.y * 8.1) * 0.16;\nvec3 flutterAxis = normalize(mix(vec3(0., 0., 1.), vec3(a_angle.xy * 0.8, 1.), motionBlend));\nmat4 rotMat = rotationMatrix(flutterAxis, mix(calmFlutter, livelyFlutter, motionBlend));");
 Gt = Gt.replace("instanceMat[3][2] = instanceMat[3][2];", "float livelyDrift = mix(0.15, 0.52, motionBlend);\n  float livelyRate = mix(0.5, 1.35, motionBlend);\n  instanceMat[3][0] += sin(u_time * livelyRate + a_angle.w * 11.3) * a_param.y * livelyDrift * motionBlend;\n  instanceMat[3][1] += cos(u_time * (livelyRate * 0.83) + a_angle.z * 9.1) * a_param.z * livelyDrift * motionBlend;\n  instanceMat[3][2] += sin(u_time * (livelyRate * 0.61) + a_angle.x * 7.7) * 0.42 * motionBlend;");
 // Replace the foreground layer's inverse parallax with a local cursor magnet.
-Gt = Gt.replace("instanceMat[3][0] = instanceMat[3][0] * u_resolution.x * zFactor - u_mouse.x * a_param.x + sin(u_time * a_param.w * 0.5) * a_param.y * 0.15;\n  instanceMat[3][1] = instanceMat[3][1] * u_resolution.y * zFactor - u_mouse.y * a_param.x + cos(u_time * a_param.w * 0.5) * a_param.z * 0.15;", "vec2 nearPosition = vec2(\n    instanceMat[3][0] * u_resolution.x * zFactor + sin(u_time * a_param.w * 0.5) * a_param.y * 0.15,\n    instanceMat[3][1] * u_resolution.y * zFactor + cos(u_time * a_param.w * 0.5) * a_param.z * 0.15\n  );\n  vec2 nearPointer = u_mouse * u_resolution * 0.5;\n  vec2 nearDelta = nearPointer - nearPosition;\n  float nearField = (1.0 - smoothstep(0.18, 1.45, length(nearDelta))) * u_pointerActive;\n  float nearPull = clamp(u_attract * nearField * 0.95, 0.0, 0.82);\n  vec2 nearLatch = (a_param.yz - vec2(0.5)) * 0.22;\n  nearPosition = mix(nearPosition, nearPointer + nearLatch, nearPull);\n  instanceMat[3][0] = nearPosition.x;\n  instanceMat[3][1] = nearPosition.y;\n  instanceMat[3][2] += nearField * u_attract * 0.55;");
+Gt = Gt.replace("instanceMat[3][0] = instanceMat[3][0] * u_resolution.x * zFactor - u_mouse.x * a_param.x + sin(u_time * a_param.w * 0.5) * a_param.y * 0.15;\n  instanceMat[3][1] = instanceMat[3][1] * u_resolution.y * zFactor - u_mouse.y * a_param.x + cos(u_time * a_param.w * 0.5) * a_param.z * 0.15;", "vec2 nearPosition = vec2(\n    instanceMat[3][0] * u_resolution.x * zFactor + sin(u_time * a_param.w * 0.5) * a_param.y * 0.15,\n    instanceMat[3][1] * u_resolution.y * zFactor + cos(u_time * a_param.w * 0.5) * a_param.z * 0.15\n  );\n  vec2 nearPointer = u_mouse * u_resolution * 0.5;\n  vec2 nearDelta = nearPointer - nearPosition;\n  float nearField = (1.0 - smoothstep(0.18, 1.45, length(nearDelta))) * 0.0;\n  float nearPull = clamp(u_attract * nearField * 0.95, 0.0, 0.82);\n  vec2 nearLatch = (a_param.yz - vec2(0.5)) * 0.22;\n  nearPosition = mix(nearPosition, nearPointer + nearLatch, nearPull);\n  instanceMat[3][0] = nearPosition.x;\n  instanceMat[3][1] = nearPosition.y;\n  instanceMat[3][2] += nearField * u_attract * 0.55;");
 if (sharpDocuments) {
   Gt = Gt.replace("mat4 rotMat = rotationMatrix(flutterAxis, mix(calmFlutter, livelyFlutter, motionBlend));", "mat4 rotMat = rotationMatrix(vec3(0., 0., 1.), mix(calmFlutter, livelyFlutter, motionBlend) * 0.32);");
 }
@@ -3600,6 +3683,29 @@ u.paperTune = paperTune;
 // One lock window for the document grid. Covers the assembled page (u_progress 0.84-1.28) and the stamp state (u_progress 2.55+),
 // so the grid is flat and seamless in both sections. u_explode still scatters it.
 var gridLockExpr = "max(smoothstep(0.84, 0.985, clamp(u_progress, 0., 1.)) * (1.0 - smoothstep(1.04, 1.28, u_progress)), smoothstep(2.55, 2.95, u_progress)) * (1.0 - smoothstep(0.02, 0.34, u_explode))";
+// Each piece keeps the source GLB in flight and a complete paper face when
+// settled. The face belongs to the same instance; there is no full-size plane.
+function documentMosaicGeometry(source) {
+  const geometry = source.clone();
+  const count = geometry.attributes.position.count;
+  const extra = {
+    position: [-0.36, -0.5, 0, 0.36, -0.5, 0, 0.36, 0.5, 0, -0.36, 0.5, 0],
+    normal: [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1],
+    uv: [0, 0, 1, 0, 1, 1, 0, 1]
+  };
+  for (const name of Object.keys(extra)) {
+    const attribute = geometry.attributes[name];
+    const values = new Float32Array(attribute.array.length + extra[name].length);
+    values.set(attribute.array);
+    values.set(extra[name], attribute.array.length);
+    geometry.setAttribute(name, new attribute.constructor(values, attribute.itemSize));
+  }
+  geometry.setIndex([...geometry.index.array, count, count + 1, count + 2, count, count + 2, count + 3]);
+  const fill = new Float32Array(count + 4);
+  fill.fill(1, count);
+  geometry.setAttribute("a_fill", new geometry.attributes.position.constructor(fill, 1));
+  return geometry;
+}
 var paperVertexDecl = "varying vec4 v_paperSeed;\nvarying vec3 v_paperNormal;\nvec3 paperN = vec3(0., 0., 1.);\n";
 function paperVertexShape(seedExpr, bendScale, flatLock) {
   // flatLock: while the grid is locked (assembled document) bend, twist and aspect jitter fade to zero,
@@ -3617,6 +3723,7 @@ function paperVertexShape(seedExpr, bendScale, flatLock) {
     "paperN = normal;",
     "paperN.xy -= vec2(pBend * 15.4 * transformed.x + pTwist * 2.0 * transformed.y, pTwist * 2.0 * transformed.x) * sign(normal.z) * step(0.5, abs(normal.z));",
     "transformed.x *= pAspect;",
+    flatLock ? "transformed.x *= mix(1.0, 4.25 / (6.01 * 0.72), step(0.999, u_finaleLayout));" : "",
     "paperN.x /= pAspect;",
     "v_paperSeed = pSeed;",
     "vec4 mvPosition = vec4( transformed, 1.0 );",
@@ -3624,7 +3731,30 @@ function paperVertexShape(seedExpr, bendScale, flatLock) {
     "v_paperFace = abs(normal.z);"
   ].join("\n");
 }
+// Local paper relief shared by the settled VISA page and every folder layer.
+// Multiplicative shading preserves both navy ink and ivory paper; the complete
+// per-instance face remains intact, including its folded corner.
+var paperMicroReliefDecl = [
+  "vec3 paperMicroRelief(vec3 color, vec2 uv, float seed, float strength) {",
+  "  if (strength <= 0.0) return color;",
+  "  uv = clamp(uv, 0.0, 1.0);",
+  "  float shadowEdge = 1.0 - smoothstep(0.0, 0.07, min(uv.x, 1.0 - uv.y));",
+  "  float lightEdge = 1.0 - smoothstep(0.0, 0.045, min(1.0 - uv.x, uv.y));",
+  "  vec2 corner = (uv - vec2(0.7778, 0.81)) / vec2(0.2222, 0.19);",
+  "  float shadow = (1.0 - smoothstep(0.0, 0.3, -corner.y)) * step(corner.y, 0.0) * clamp(1.0 - corner.x, 0.0, 1.0) * smoothstep(-0.25, 0.05, corner.x);",
+  "  shadow += (1.0 - smoothstep(0.0, 0.22, -corner.x)) * step(corner.x, 0.0) * clamp(1.0 - corner.y, 0.0, 1.0) * smoothstep(-0.2, 0.05, corner.y) * 0.55;",
+  "  float cornerMask = smoothstep(0.0, 0.08, min(corner.x, corner.y));",
+  "  float crease = corner.x + corner.y;",
+  "  float fold = smoothstep(0.94, 1.06, crease) * cornerMask;",
+  "  float foldShade = (1.0 - smoothstep(1.0, 1.3, crease)) * fold;",
+  "  float relief = 1.0 + (seed - 0.5) * 0.024 - shadowEdge * 0.055 + lightEdge * 0.014;",
+  "  relief *= 1.0 - clamp(shadow, 0.0, 1.0) * 0.2;",
+  "  relief *= 1.0 + fold * 0.03 - foldShade * 0.1;",
+  "  return color * mix(1.0, relief, clamp(strength, 0.0, 1.0));",
+  "}"
+].join("\n");
 var paperFragmentDecl = [
+  paperMicroReliefDecl,
   "uniform float u_pExposure; uniform float u_pContrast; uniform float u_pSaturation; uniform vec3 u_pTint;",
   "uniform float u_pAmbient; uniform float u_pKey; uniform float u_pSpec; uniform float u_pRim; uniform float u_pAtlas;",
   "varying vec4 v_paperSeed;",
@@ -3808,6 +3938,13 @@ var paperFragmentDecl = [
   "}",
   ""
 ].join("\n");
+function paperColorGrade() {
+  return [
+    "paperLit = (paperLit - 0.5) * u_pContrast + 0.5;",
+    "float pLum = dot(paperLit, vec3(0.299, 0.587, 0.114));",
+    "paperLit = mix(vec3(pLum), paperLit, u_pSaturation) * u_pExposure * u_pTint;"
+  ].join("\n");
+}
 function paperFragmentSurface(baseExpr, detail, inkOpacity, mosaic) {
   var d = detail.toFixed(3);
   var noiseMix = sharpDocuments ? (mosaic ? "0.08" : "0.18") : "1.0";
@@ -3820,6 +3957,7 @@ function paperFragmentSurface(baseExpr, detail, inkOpacity, mosaic) {
     "vec2 pUv = v_paperUv - 2.0 * vec2(pBackSide, pFlap);",
     "float pFace = step(0.7, v_paperFace);",
     flatMicroLighting ? "if (pFace < 0.5 || pBackSide > 0.5) discard;" : "",
+    mosaic ? "if ((v_tileFill > 0.5 && u_finaleLayout < 0.999) || (v_tileFill < 0.5 && u_finaleLayout >= 0.999)) discard;" : "",
     "vec3 pPaper = " + baseExpr + ";",
     "pPaper *= 0.96 + 0.07 * v_paperSeed.y;",
     "float pFibRaw = pNoise(pUv * vec2(55., 80.) + v_paperSeed.zw * 40.) * 0.65 + pNoise(pUv * vec2(210., 290.) + v_paperSeed.wz * 70.) * 0.35;",
@@ -3841,15 +3979,39 @@ function paperFragmentSurface(baseExpr, detail, inkOpacity, mosaic) {
       "vec2 pCell = v_cell;",
       "vec2 pMasterUv = (pCell + clamp(pUv, 0.0, 1.0)) / u_gridSize;",
       "vec3 pMaster = texture2D(t_master, pMasterUv).rgb;",
+      "// Ink is printed into each tile's rest UVs, so it follows that tile's motion.",
+      "if (u_stampInk > 0.0) {",
+      "  vec2 pStampDelta = (pMasterUv - 0.5) * vec2(4.25, 6.01) - u_stampPlacement.xy;",
+      "  float pStampC = cos(u_stampAngle); float pStampS = sin(u_stampAngle);",
+      "  vec2 pStampUv = mat2(pStampC, -pStampS, pStampS, pStampC) * pStampDelta / u_stampPlacement.z + 0.5;",
+      "  if (all(greaterThanEqual(pStampUv, vec2(0.0))) && all(lessThanEqual(pStampUv, vec2(1.0)))) {",
+      "    vec4 pInk = texture2D(t_stamp, pStampUv);",
+      "    pMaster = mix(pMaster, pInk.rgb, pInk.a * u_stampInk);",
+      "  }",
+      "}",
       "float pVisaW = clamp(u_visaReveal, 0., 1.);",
       "float pCellDelay = pHash(dot(pCell, vec2(0.7549, 0.5698))) * 0.12;",
       "float pIntroMosaic = smoothstep(0.64 + pCellDelay, 0.94 + pCellDelay * 0.35, u_progress) * (1.0 - smoothstep(1.0, 1.35, u_progress));",
-      "float pMosaicW = max(pIntroMosaic, smoothstep(2.55, 2.95, u_progress)) * (1.0 - smoothstep(0.05, 0.5, u_explode)) * (1.0 - pVisaW);",
+      "float pMosaicW = max(pIntroMosaic, smoothstep(2.55, 2.95, u_progress)) * (1.0 - smoothstep(0.05, 0.5, u_explode));",
       "pFront = mix(pFront, pMaster, clamp(pMosaicW * u_masterMix, 0., 1.));",
-      "vec3 pVisaColor = texture2D(t_visa, clamp(v_id * 2.0, vec2(0.005), vec2(0.995))).rgb;",
-      "float pVisaDetail = mix(0.72, 1.18, clamp(dot(pFront, vec3(0.299, 0.587, 0.114)), 0., 1.));",
-      "vec3 pVisaSurface = pVisaColor * pVisaDetail * (0.975 + pFib * 0.04);",
-      "pFront = mix(pFront, pVisaSurface, pVisaW);"
+      "// Transform in page units to preserve the sticker aspect and angle.",
+      "vec2 pVisaCenter = vec2(0.5, 1.0 - 481.0 / 1188.0);",
+      "vec2 pVisaPage = vec2(4.25, 6.01);",
+      "vec2 pVisaDelta = (pMasterUv - pVisaCenter) * pVisaPage - u_visaOffset;",
+      "float pVisaC = cos(u_visaAngle); float pVisaS = sin(u_visaAngle);",
+      "mat2 pVisaInverse = mat2(pVisaC, -pVisaS, pVisaS, pVisaC);",
+      "vec2 pVisaLocal = pVisaInverse * pVisaDelta / u_visaScale;",
+      "vec2 pVisaUv = pVisaLocal / pVisaPage + pVisaCenter;",
+      "if (u_visaShadow > 0.0 && pVisaW > 0.0) {",
+      "  vec2 pCast = pVisaInverse * (pVisaDelta - vec2(0.035, -0.05) * (u_visaShadow / 0.12)) / u_visaScale;",
+      "  vec2 pHalf = vec2(688.0 / 840.0, 274.0 / 1188.0) * pVisaPage * 0.5;",
+      "  vec2 pRound = abs(pCast) - pHalf + 0.05;",
+      "  float pDistance = length(max(pRound, vec2(0.0))) + min(max(pRound.x, pRound.y), 0.0) - 0.05;",
+      "  float pCastAlpha = (1.0 - smoothstep(-0.025, 0.09, pDistance)) * u_visaShadow * pVisaW;",
+      "  pFront *= 1.0 - pCastAlpha;",
+      "}",
+      "vec4 pVisa = texture2D(t_visa, clamp(pVisaUv, 0.0, 1.0));",
+      "pFront = mix(pFront, pVisa.rgb, pVisa.a * pVisaW);"
     ].join("\n") : "",
     // Master mosaic: no seam ring, so the assembled document reads as one continuous image.
     mosaic ? "float pEdgeVisibility = 0.0;" : "float pEdgeVisibility = 1.0;",
@@ -3858,7 +4020,8 @@ function paperFragmentSurface(baseExpr, detail, inkOpacity, mosaic) {
     "vec2 pCorner = vec2((pUv.x - 0.7778) / 0.2222, (pUv.y - 0.81) / 0.19);",
     "float pShadow = (1.0 - smoothstep(0.0, 0.3, -pCorner.y)) * step(pCorner.y, 0.0) * clamp(1.0 - pCorner.x, 0., 1.) * smoothstep(-0.25, 0.05, pCorner.x);",
     "pShadow += (1.0 - smoothstep(0.0, 0.22, -pCorner.x)) * step(pCorner.x, 0.0) * clamp(1.0 - pCorner.y, 0., 1.) * smoothstep(-0.2, 0.05, pCorner.y) * 0.55;",
-    "pFront *= 1.0 - clamp(pShadow, 0., 1.) * 0.2 * (1.0 - pFlap);",
+    "pFront *= 1.0 - clamp(pShadow, 0., 1.) * 0.2 * (1.0 - pFlap)" + (mosaic ? " * (1.0 - u_finaleLayout)" : "") + ";",
+    mosaic ? "pFront = paperMicroRelief(pFront, pUv, v_paperSeed.y, u_finalePaper * (1.0 - pFlap));" : "",
     "vec3 pBack = vec3(0.955, 0.935, 0.895) * (0.97 + pFib * 0.045);",
     "pBack = mix(pBack, pBack * 0.9, pAtlasMask * 0.035 * " + d + ");",
     "float pCrease = pCorner.x + pCorner.y;",
@@ -3875,9 +4038,7 @@ function paperFragmentSurface(baseExpr, detail, inkOpacity, mosaic) {
     "float pSpec = " + (flatMicroLighting ? "0.0" : "pow(clamp(dot(pN, pH), 0., 1.), 16.0) * 0.05 * u_pSpec * (0.7 + 0.6 * pFib)") + ";",
     "float pRim = " + (flatMicroLighting ? "0.0" : "pow(1.0 - clamp(abs(pN.z), 0., 1.), 3.0) * 0.06 * u_pRim") + ";",
     "vec3 paperLit = pBase * pLight + pSpec + pRim * pPaper;",
-    "paperLit = (paperLit - 0.5) * u_pContrast + 0.5;",
-    "float pLum = dot(paperLit, vec3(0.299, 0.587, 0.114));",
-    "paperLit = mix(vec3(pLum), paperLit, u_pSaturation) * u_pExposure * u_pTint;"
+    paperColorGrade()
   ].join("\n");
 }
 class Ht extends Re.T {
@@ -3950,7 +4111,8 @@ ${e.vertexShader}`;
           e.fragmentShader = `uniform ${n.type} ${n.id};
 ${e.fragmentShader}`;
         }
-        e.vertexShader = Vt + e.vertexShader;
+        Object.assign(e.uniforms, heroInteractionUniforms);
+        e.vertexShader = heroInteractionDecl + Vt + e.vertexShader;
         e.vertexShader = Wt + e.vertexShader;
         e.vertexShader = "attribute vec4 a_param;\n" + e.vertexShader;
         e.vertexShader = "attribute vec4 a_angle;\n" + e.vertexShader;
@@ -3970,10 +4132,12 @@ ${e.fragmentShader}`;
         e.fragmentShader = e.fragmentShader.replace("outgoingLight.rgb = col.rgb;", paperFragmentSurface("col.rgb", 1.0, 0.9) + "\noutgoingLight.rgb = paperLit;");
         Object.assign(e.uniforms, paperTune);
         e.fragmentShader = paperFragmentDecl + e.fragmentShader;
+        e.vertexShader = e.vertexShader.replace("gl_Position = projectionMatrix * mvPosition;", "v_paperNormal = heroInteractionNormal(v_paperNormal);\ngl_Position = projectionMatrix * mvPosition;");
       }
     });
   }
   _setupMesh() {
+    attachHeroInteraction(this._geometry, this._nb);
     this._mesh = new Lt.S(this._geometry, this._material, this._nb);
     const e = new It.y();
     const t = new He.P();
@@ -4055,7 +4219,8 @@ ${e.fragmentShader}`;
         u_pointerActive: this._pointerActiveUniform
       },
       onBeforeCompile: function (e) {
-        e.vertexShader = Vt + e.vertexShader;
+        Object.assign(e.uniforms, heroInteractionUniforms);
+        e.vertexShader = heroInteractionDecl + Vt + e.vertexShader;
         e.vertexShader = Wt + e.vertexShader;
         e.vertexShader = "attribute vec4 a_param;\n" + e.vertexShader;
         e.vertexShader = "attribute vec4 a_angle;\n" + e.vertexShader;
@@ -4109,7 +4274,9 @@ ${e.fragmentShader}`;
   }
   _updateMouse() {
     const e = 1 - zt(Ut(u.sectionProgress, 0.12, 0.52, 0, 1), 0, 1);
-    const t = (u.isMobile || u.reducedMotion ? 0 : this._pointerActiveTarget) * e;
+    const allowed = !u.isMobile && !u.reducedMotion && !document.hidden
+      && window.matchMedia("(hover: hover) and (pointer: fine)").matches && window.__DALA_HERO_POINTER__?.inside;
+    const t = (allowed ? this._pointerActiveTarget : 0) * e;
     this._pointerActiveUniform.value += (t - this._pointerActiveUniform.value) * (this._easing * 1.6);
     this._material.customUniforms[3].value.x += (this._mouseTg.x - this._material.customUniforms[3].value.x) * this._easing;
     this._material.customUniforms[3].value.y += (this._mouseTg.y - this._material.customUniforms[3].value.y) * this._easing;
@@ -4270,56 +4437,41 @@ class Jt extends Re.T {
 var en = "#define GLSLIFY 1\nmat4 rotationMatrix(vec3 axis, float angle)\n{\n    axis = normalize(axis);\n    float s = sin(angle);\n    float c = cos(angle);\n    float oc = 1.0 - c;\n    \n    return mat4(oc * axis.x * axis.x + c,           oc * axis.x * axis.y - axis.z * s,  oc * axis.z * axis.x + axis.y * s,  0.0,\n                oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c,           oc * axis.y * axis.z - axis.x * s,  0.0,\n                oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c,           0.0,\n                0.0,                                0.0,                                0.0,                                1.0);\n}\n\nmat3 calcLookAtMatrix(vec3 origin, vec3 target, float roll) {\n  vec3 rr = vec3(sin(roll), cos(roll), 0.0);\n  vec3 ww = normalize(target - origin);\n  vec3 uu = normalize(cross(ww, rr));\n  vec3 vv = normalize(cross(uu, ww));\n\n  return mat3(uu, vv, ww);\n}\n";
 // Desktop hero band: bank 0 X stretch so the band spans the full viewport width.
 var heroBandStretch = u.isMobile ? "1.0" : "1.95";
-var tn = "#define GLSLIFY 1\n// mat4 rotMat = rotationMatrix(vec3(0., 0., a_angle.z), a_angle.w);\nvec4 mvPosition = vec4( transformed, 1.0 );\n\n// // Show Animation -----\n// float d = 0.00005;\n// float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * a_order));\n// showVal = qinticInOut(showVal);\n// float radius = mix(u_factor + a_random.x * 3., u_factor, showVal) + u_explode * a_random.y;\n\nvec3 pos = texture2D(t_position, a_id).xyz;\nvec3 basePos = pos;\n\n// pos.x = (pos.x - 0.5) * 2. * radius;\n// pos.y = (pos.y - 0.5) * 2. * radius;\n// pos.z = (pos.z - 0.5) * 2. * radius;\n\n// vec3 pos2 = texture2D(t_position, vec2(a_id.x + 0.5, a_id.y)).xyz;\n// pos2.x = (pos2.x - 0.5) * 2. * radius;\n// pos2.y = (pos2.y - 0.5) * 2. * radius;\n// pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n// vec3 pos3 = texture2D(t_position, vec2(a_id.x, a_id.y + 0.5)).xyz;\n// pos3.x = (pos3.x - 0.5) * 2. * radius;\n// pos3.y = (pos3.y - 0.5) * 2. * radius;\n// pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n// vec3 pos4 = texture2D(t_position, vec2(a_id.x + 0.5, a_id.y + 0.5)).xyz;\n// pos4.x = (pos4.x - 0.5) * 2. * radius;\n// pos4.y = (pos4.y - 0.5) * 2. * radius;\n// pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n// pos = mix(pos, pos2, u_progress);\n// pos = mix(pos, pos3, max(0., u_progress - 1.));\n// pos = mix(pos, pos4, max(0., u_progress - 2.));\n\npos = texture2D(t_simulation, vec2(a_id.x * 2., a_id.y * 2.)).xyz;\n// vec3 basePos = pos;\n\n// Mouse Animation -----\nvec4 mPos = vec4(pos, 1.);\nmPos *= rotationMatrix(vec3(1., 0., 0.), u_rotation.x * -1.);\nmPos *= rotationMatrix(vec3(0., 1., 0.), u_rotation.y * -1.);\nmPos *= rotationMatrix(vec3(0., 0., 1.), u_rotation.z * -1.);\nmPos.y -= 1.;\nmPos.x += u_offset.x;\nmPos.y += u_offset.y;\nvec2 resolution = mix(\n  u_resolution - u_resolution * 0.5,\n  u_resolution2 - u_resolution2 * 0.5,\n  min(1., max(0., u_progress2))\n);\nvec2 m = u_mouse * vec2(1., 1.);\nfloat dist = smoothstep( 1.25 + abs(max(u_delta.x, u_delta.y)), 0., distance(mPos.xy, m * resolution)); \npos.x += dist * sin(u_time * a_random.y) * (a_random.z*0.35 + u_delta.x) * abs( u_explode - 1.);\npos.y += dist * cos(u_time * a_random.y) * (a_random.z* 0.35 + u_delta.y) * abs( u_explode - 1.);\n\n// pos.x += m.x * 0.05;\n// pos.y += m.y * 0.05;\n\n// Offset Position -----\n// pos += u_offset;\n\n// Mouse Animation -----\n// vec4 fake_frag_coord  = mvPosition * vec4(pos, 1.);\n// fake_frag_coord.xyz /= fake_frag_coord.w;\n// fake_frag_coord.w = 1.0 / fake_frag_coord.w;\n// fake_frag_coord.xyz *= vec3 (0.5) + vec3 (0.5);\n// fake_frag_coord.xy  *= u_resolution.xy * 0.5; \n// fake_frag_coord.xy  *= vec2(-1., 1.); \n\n// // Mouse Animation -----\n// vec4 mPos = vec4(pos.xy, 1., 1.);\n// mPos.y -= 1.;\n// mPos.xy += u_offset.xy;\n// // mPos *= rotationMatrix(vec3(1., 0., 0.), u_rotation.x);\n// // mPos *= rotationMatrix(vec3(0., 1., 0.), u_rotation.y);\n// // mPos *= rotationMatrix(vec3(0., 0., 1.), u_rotation.z);\n// vec4 tFluid = texture2D( t_fluid, (mPos.xy + u_resolution * 0.5) / u_resolution );\n// // pos.x += tFluid.r * 0.025;\n// // pos.x -= tFluid.b * 0.025;\n// pos.z -= tFluid.r * 0.01;\n\n// vec2 resolution = u_resolution * 0.5;\n// vec2 m = resolution * u_mouse * vec2(1., 1.);\n// float dist = smoothstep(2., 0., distance(pos.xy + u_offset.xy, m));\n// pos *= max(1., 1. + dist * 0.1 + dist * abs(sin(basePos.y * 120. + u_time * 0.5)) * 0.1);\n\nfloat n = snoise(pos * u_amplitude);\n// float n2 = snoise(pos * u_amplitude2 + u_time * 0.2);\nmat4 rotMat = rotationMatrix(vec3(1., 0., 1.), n);\n// mat4 rotMat2 = rotationMatrix(vec3(0., 1., 0.), mod(u_time * a_random.x * 2., 3.1416 * 2.));\nmat4 rotMat2 = rotationMatrix(vec3(0., 1., 1.), mod(n + u_time, 3.1416 * 2.));\n\nfloat scale = texture2D(t_scale, a_id).x * u_scale;\nfloat scale2 = texture2D(t_scale, vec2(a_id.x + 0.5, a_id.y)).x * u_scale;\nfloat scale3 = texture2D(t_scale, vec2(a_id.x + 0.5, a_id.y + 0.5)).x * u_scale;\nfloat scale4 = texture2D(t_scale, vec2(a_id.x + 0.5, a_id.y + 0.5)).x * u_scale;\nscale = mix(scale, scale2, u_progress);\nscale = mix(scale, scale3, max(0., u_progress - 1.));\nscale = mix(scale, scale4, max(0., u_progress - 2.));\n\nscale += dist * 0.75 * abs( u_explode - 1.);\n\n#ifdef USE_INSTANCING\n  mat4 instanceMat = instanceMatrix;\n\n  instanceMat[3][0] = instanceMat[3][0] + pos.x;\n  instanceMat[3][1] = instanceMat[3][1] + pos.y;\n  instanceMat[3][2] = instanceMat[3][2] + pos.z;\n\n  mat4 rotMat3 = mat4(calcLookAtMatrix(vec3(instanceMat[3][0] + u_offset.x, instanceMat[3][1] + u_offset.y, instanceMat[3][2]), cameraPosition, 0.));\n\n  // instanceMat[0][0] = instanceMat[0][0] * smoothstep(0., 1., scale);\n  // instanceMat[1][1] = instanceMat[1][1] * smoothstep(0., 1., scale);\n  // instanceMat[2][2] = instanceMat[2][2] * smoothstep(0., 1., scale);\n\n  instanceMat[0][0] = instanceMat[0][0] * scale;\n  instanceMat[1][1] = instanceMat[1][1] * scale;\n  instanceMat[2][2] = instanceMat[2][2] * scale;\n\n  // instanceMat *= rotMat;\n  if (u_mobileRotation > 0.) {\n    instanceMat *= rotMat3;\n  } else {\n    instanceMat *= rotMat2;\n  }\n\n\tmvPosition = instanceMat * mvPosition;\n  // mvPosition.xyz += u_offset;\n#endif\n\n// Offset Position -----\nmat4 modViewMatrix = modelViewMatrix;\nmodViewMatrix[3][0] += u_offset.x;\nmodViewMatrix[3][1] += u_offset.y;\nmodViewMatrix *= rotationMatrix(vec3(1., 0., 0.), u_rotation.x);\nmodViewMatrix *= rotationMatrix(vec3(0., 1., 0.), u_rotation.y);\nmodViewMatrix *= rotationMatrix(vec3(0., 0., 1.), u_rotation.z);\n\nmvPosition = modViewMatrix * mvPosition;\n\n// mat4 testMatrix = modelMatrix;\n// testMatrix[3][0] += u_offset.x;\n// testMatrix *= rotationMatrix(vec3(0., 1., 0.), u_rotation);\n\n// mvPosition2 = testMatrix * mvPosition2;\n\nv_pos = mvPosition.xyz;\nv_pos.z += 10.;\n\n// // Mouse Animation -----\n// vec2 resolution = u_resolution * 0.5;\n// vec2 m = u_mouse * vec2(1., 1.);\n// // float dist = smoothstep(.1, 0., distance(mvPosition.xy / resolution, m));\n// float dist = step(distance(mvPosition.xy / resolution, m), .1);\n// mvPosition.x += dist * sin(u_time * a_random.y) * a_random.z;\n// mvPosition.y += dist * cos(u_time * a_random.y) * a_random.z;\n// // mvPosition.z += dist * cos(u_time * a_random.y) * a_random.z;\n// // mvPosition.z += dist * abs(sin(basePos.y * 120. + u_time * 0.5)) * 1.5;\n\n// vec4 tFluid = texture2D( t_fluid, (mvPosition.xy + vec2(1.) ) * 0.5);\n// mvPosition.x += tFluid.r * 0.01;\n// mvPosition.x -= tFluid.b * 0.01;\n// pos.y += tFluid.g * 0.01;\n// mvPosition.z += tFluid.r * 0.05;\n\ngl_Position = projectionMatrix * mvPosition;\n\nv_id = a_id;\nv_hover = dist;";
+var tn = "#define GLSLIFY 1\n// mat4 rotMat = rotationMatrix(vec3(0., 0., a_angle.z), a_angle.w);\nvec4 mvPosition = vec4( transformed, 1.0 );\n\n// // Show Animation -----\n// float d = 0.00005;\n// float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * a_order));\n// showVal = qinticInOut(showVal);\n// float radius = mix(u_factor + a_random.x * 3., u_factor, showVal) + u_explode * a_random.y;\n\nvec3 pos = texture2D(t_position, a_id).xyz;\nvec3 basePos = pos;\n\n// pos.x = (pos.x - 0.5) * 2. * radius;\n// pos.y = (pos.y - 0.5) * 2. * radius;\n// pos.z = (pos.z - 0.5) * 2. * radius;\n\n// vec3 pos2 = texture2D(t_position, vec2(a_id.x + 0.5, a_id.y)).xyz;\n// pos2.x = (pos2.x - 0.5) * 2. * radius;\n// pos2.y = (pos2.y - 0.5) * 2. * radius;\n// pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n// vec3 pos3 = texture2D(t_position, vec2(a_id.x, a_id.y + 0.5)).xyz;\n// pos3.x = (pos3.x - 0.5) * 2. * radius;\n// pos3.y = (pos3.y - 0.5) * 2. * radius;\n// pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n// vec3 pos4 = texture2D(t_position, vec2(a_id.x + 0.5, a_id.y + 0.5)).xyz;\n// pos4.x = (pos4.x - 0.5) * 2. * radius;\n// pos4.y = (pos4.y - 0.5) * 2. * radius;\n// pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n// pos = mix(pos, pos2, u_progress);\n// pos = mix(pos, pos3, max(0., u_progress - 1.));\n// pos = mix(pos, pos4, max(0., u_progress - 2.));\n\npos = texture2D(t_simulation, vec2(a_id.x * 2., a_id.y * 2.)).xyz;\n// vec3 basePos = pos;\n\n// Mouse Animation -----\nvec4 mPos = vec4(pos, 1.);\nmPos *= rotationMatrix(vec3(1., 0., 0.), u_rotation.x * -1.);\nmPos *= rotationMatrix(vec3(0., 1., 0.), u_rotation.y * -1.);\nmPos *= rotationMatrix(vec3(0., 0., 1.), u_rotation.z * -1.);\nmPos.y -= 1.;\nmPos.x += u_offset.x;\nmPos.y += u_offset.y;\nvec2 resolution = mix(\n  u_resolution - u_resolution * 0.5,\n  u_resolution2 - u_resolution2 * 0.5,\n  min(1., max(0., u_progress2))\n);\nvec2 m = u_mouse * vec2(1., 1.);\nfloat dist = smoothstep( 1.25 + abs(max(u_delta.x, u_delta.y)), 0., distance(mPos.xy, m * resolution)); \npos.x += dist * sin(u_time * a_random.y) * (a_random.z*0.35 + u_delta.x) * abs( u_explode - 1.);\npos.y += dist * cos(u_time * a_random.y) * (a_random.z* 0.35 + u_delta.y) * abs( u_explode - 1.);\n\n// pos.x += m.x * 0.05;\n// pos.y += m.y * 0.05;\n\n// Offset Position -----\n// pos += u_offset;\n\n// Mouse Animation -----\n// vec4 fake_frag_coord  = mvPosition * vec4(pos, 1.);\n// fake_frag_coord.xyz /= fake_frag_coord.w;\n// fake_frag_coord.w = 1.0 / fake_frag_coord.w;\n// fake_frag_coord.xyz *= vec3 (0.5) + vec3 (0.5);\n// fake_frag_coord.xy  *= u_resolution.xy * 0.5; \n// fake_frag_coord.xy  *= vec2(-1., 1.); \n\n// // Mouse Animation -----\n// vec4 mPos = vec4(pos.xy, 1., 1.);\n// mPos.y -= 1.;\n// mPos.xy += u_offset.xy;\n// // mPos *= rotationMatrix(vec3(1., 0., 0.), u_rotation.x);\n// // mPos *= rotationMatrix(vec3(0., 1., 0.), u_rotation.y);\n// // mPos *= rotationMatrix(vec3(0., 0., 1.), u_rotation.z);\n// vec4 tFluid = texture2D( t_fluid, (mPos.xy + u_resolution * 0.5) / u_resolution );\n// // pos.x += tFluid.r * 0.025;\n// // pos.x -= tFluid.b * 0.025;\n// pos.z -= tFluid.r * 0.01;\n\n// vec2 resolution = u_resolution * 0.5;\n// vec2 m = resolution * u_mouse * vec2(1., 1.);\n// float dist = smoothstep(2., 0., distance(pos.xy + u_offset.xy, m));\n// pos *= max(1., 1. + dist * 0.1 + dist * abs(sin(basePos.y * 120. + u_time * 0.5)) * 0.1);\n\nfloat n = snoise(pos * u_amplitude);\n// float n2 = snoise(pos * u_amplitude2 + u_time * 0.2);\nmat4 rotMat = rotationMatrix(vec3(1., 0., 1.), n);\n// mat4 rotMat2 = rotationMatrix(vec3(0., 1., 0.), mod(u_time * a_random.x * 2., 3.1416 * 2.));\nmat4 rotMat2 = rotationMatrix(vec3(0., 1., 1.), mod(n + u_time, 3.1416 * 2.));\n\nfloat scale = texture2D(t_scale, a_id).x * u_scale;\nfloat scale2 = texture2D(t_scale, vec2(a_id.x + 0.5, a_id.y)).x * u_scale;\nfloat scale3 = texture2D(t_scale, vec2(a_id.x, a_id.y + 0.5)).x * u_scale;\nfloat scale4 = texture2D(t_scale, vec2(a_id.x + 0.5, a_id.y + 0.5)).x * u_scale;\nscale = mix(scale, scale2, u_progress);\nscale = mix(scale, scale3, max(0., u_progress - 1.));\nscale = mix(scale, scale4, max(0., u_progress - 2.));\n\nscale += dist * 0.75 * abs( u_explode - 1.);\n\n#ifdef USE_INSTANCING\n  mat4 instanceMat = instanceMatrix;\n\n  instanceMat[3][0] = instanceMat[3][0] + pos.x;\n  instanceMat[3][1] = instanceMat[3][1] + pos.y;\n  instanceMat[3][2] = instanceMat[3][2] + pos.z;\n\n  mat4 rotMat3 = mat4(calcLookAtMatrix(vec3(instanceMat[3][0] + u_offset.x, instanceMat[3][1] + u_offset.y, instanceMat[3][2]), cameraPosition, 0.));\n\n  // instanceMat[0][0] = instanceMat[0][0] * smoothstep(0., 1., scale);\n  // instanceMat[1][1] = instanceMat[1][1] * smoothstep(0., 1., scale);\n  // instanceMat[2][2] = instanceMat[2][2] * smoothstep(0., 1., scale);\n\n  instanceMat[0][0] = instanceMat[0][0] * scale;\n  instanceMat[1][1] = instanceMat[1][1] * scale;\n  instanceMat[2][2] = instanceMat[2][2] * scale;\n\n  // instanceMat *= rotMat;\n  if (u_mobileRotation > 0.) {\n    instanceMat *= rotMat3;\n  } else {\n    instanceMat *= rotMat2;\n  }\n\n\tmvPosition = instanceMat * mvPosition;\n  // mvPosition.xyz += u_offset;\n#endif\n\n// Offset Position -----\nmat4 modViewMatrix = modelViewMatrix;\nmodViewMatrix[3][0] += u_offset.x;\nmodViewMatrix[3][1] += u_offset.y;\nmodViewMatrix *= rotationMatrix(vec3(1., 0., 0.), u_rotation.x);\nmodViewMatrix *= rotationMatrix(vec3(0., 1., 0.), u_rotation.y);\nmodViewMatrix *= rotationMatrix(vec3(0., 0., 1.), u_rotation.z);\n\nmvPosition = modViewMatrix * mvPosition;\n\n// mat4 testMatrix = modelMatrix;\n// testMatrix[3][0] += u_offset.x;\n// testMatrix *= rotationMatrix(vec3(0., 1., 0.), u_rotation);\n\n// mvPosition2 = testMatrix * mvPosition2;\n\nv_pos = mvPosition.xyz;\nv_pos.z += 10.;\n\n// // Mouse Animation -----\n// vec2 resolution = u_resolution * 0.5;\n// vec2 m = u_mouse * vec2(1., 1.);\n// // float dist = smoothstep(.1, 0., distance(mvPosition.xy / resolution, m));\n// float dist = step(distance(mvPosition.xy / resolution, m), .1);\n// mvPosition.x += dist * sin(u_time * a_random.y) * a_random.z;\n// mvPosition.y += dist * cos(u_time * a_random.y) * a_random.z;\n// // mvPosition.z += dist * cos(u_time * a_random.y) * a_random.z;\n// // mvPosition.z += dist * abs(sin(basePos.y * 120. + u_time * 0.5)) * 1.5;\n\n// vec4 tFluid = texture2D( t_fluid, (mvPosition.xy + vec2(1.) ) * 0.5);\n// mvPosition.x += tFluid.r * 0.01;\n// mvPosition.x -= tFluid.b * 0.01;\n// pos.y += tFluid.g * 0.01;\n// mvPosition.z += tFluid.r * 0.05;\n\ngl_Position = projectionMatrix * mvPosition;\n\nv_id = a_id;\nv_hover = dist;";
 var nn = "#define GLSLIFY 1\n//\n// Description : Array and textureless GLSL 2D/3D/4D simplex \n//               noise functions.\n//      Author : Ian McEwan, Ashima Arts.\n//  Maintainer : stegu\n//     Lastmod : 20201014 (stegu)\n//     License : Copyright (C) 2011 Ashima Arts. All rights reserved.\n//               Distributed under the MIT License. See LICENSE file.\n//               https://github.com/ashima/webgl-noise\n//               https://github.com/stegu/webgl-noise\n// \n\nvec3 mod289(vec3 x) {\n  return x - floor(x * (1.0 / 289.0)) * 289.0;\n}\n\nvec4 mod289(vec4 x) {\n  return x - floor(x * (1.0 / 289.0)) * 289.0;\n}\n\nvec4 permute(vec4 x) {\n     return mod289(((x*34.0)+10.0)*x);\n}\n\nvec4 taylorInvSqrt(vec4 r)\n{\n  return 1.79284291400159 - 0.85373472095314 * r;\n}\n\nfloat snoise(vec3 v)\n  { \n  const vec2  C = vec2(1.0/6.0, 1.0/3.0) ;\n  const vec4  D = vec4(0.0, 0.5, 1.0, 2.0);\n\n// First corner\n  vec3 i  = floor(v + dot(v, C.yyy) );\n  vec3 x0 =   v - i + dot(i, C.xxx) ;\n\n// Other corners\n  vec3 g = step(x0.yzx, x0.xyz);\n  vec3 l = 1.0 - g;\n  vec3 i1 = min( g.xyz, l.zxy );\n  vec3 i2 = max( g.xyz, l.zxy );\n\n  //   x0 = x0 - 0.0 + 0.0 * C.xxx;\n  //   x1 = x0 - i1  + 1.0 * C.xxx;\n  //   x2 = x0 - i2  + 2.0 * C.xxx;\n  //   x3 = x0 - 1.0 + 3.0 * C.xxx;\n  vec3 x1 = x0 - i1 + C.xxx;\n  vec3 x2 = x0 - i2 + C.yyy; // 2.0*C.x = 1/3 = C.y\n  vec3 x3 = x0 - D.yyy;      // -1.0+3.0*C.x = -0.5 = -D.y\n\n// Permutations\n  i = mod289(i); \n  vec4 p = permute( permute( permute( \n             i.z + vec4(0.0, i1.z, i2.z, 1.0 ))\n           + i.y + vec4(0.0, i1.y, i2.y, 1.0 )) \n           + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));\n\n// Gradients: 7x7 points over a square, mapped onto an octahedron.\n// The ring size 17*17 = 289 is close to a multiple of 49 (49*6 = 294)\n  float n_ = 0.142857142857; // 1.0/7.0\n  vec3  ns = n_ * D.wyz - D.xzx;\n\n  vec4 j = p - 49.0 * floor(p * ns.z * ns.z);  //  mod(p,7*7)\n\n  vec4 x_ = floor(j * ns.z);\n  vec4 y_ = floor(j - 7.0 * x_ );    // mod(j,N)\n\n  vec4 x = x_ *ns.x + ns.yyyy;\n  vec4 y = y_ *ns.x + ns.yyyy;\n  vec4 h = 1.0 - abs(x) - abs(y);\n\n  vec4 b0 = vec4( x.xy, y.xy );\n  vec4 b1 = vec4( x.zw, y.zw );\n\n  //vec4 s0 = vec4(lessThan(b0,0.0))*2.0 - 1.0;\n  //vec4 s1 = vec4(lessThan(b1,0.0))*2.0 - 1.0;\n  vec4 s0 = floor(b0)*2.0 + 1.0;\n  vec4 s1 = floor(b1)*2.0 + 1.0;\n  vec4 sh = -step(h, vec4(0.0));\n\n  vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;\n  vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;\n\n  vec3 p0 = vec3(a0.xy,h.x);\n  vec3 p1 = vec3(a0.zw,h.y);\n  vec3 p2 = vec3(a1.xy,h.z);\n  vec3 p3 = vec3(a1.zw,h.w);\n\n//Normalise gradients\n  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));\n  p0 *= norm.x;\n  p1 *= norm.y;\n  p2 *= norm.z;\n  p3 *= norm.w;\n\n// Mix final noise value\n  vec4 m = max(0.5 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);\n  m = m * m;\n  return 105.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), \n                                dot(p2,x2), dot(p3,x3) ) );\n  }";
 var rn = "#define GLSLIFY 1\nfloat qinticOut(float t) {\n  // return 1.0 - (pow(t - 1.0, 5.0));\n  return 1.0 - pow(1.0 - t , 5.0);\n  // return 1.0 - ((t - 1.0)*(t - 1.0)*(t - 1.0)*(t - 1.0)*(t - 1.0));\n}\n";
 var on = "#define GLSLIFY 1\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return step(inValue , 0.5) * inValue + step(0.5,outValue) * outValue;\n}\n";
 var sn = "precision highp float;\n#define GLSLIFY 1\n\nuniform mat4 projectionMatrix;\nuniform mat4 modelMatrix;\nuniform mat4 viewMatrix;\nuniform mat4 modelViewMatrix;\n\nattribute lowp vec2 position;\nattribute highp vec2 uv;\n\nvarying vec2 vUv;\n\nvoid main() {\n\n  vUv = uv;\n\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 0., 1.);\n}\n";
 tn = tn.replace("pos = texture2D(t_simulation, vec2(a_id.x * 2., a_id.y * 2.)).xyz;\n// vec3 basePos = pos;", "pos = texture2D(t_simulation, vec2(a_id.x * 2., a_id.y * 2.)).xyz;\nvec2 tileUv = (a_cell + 0.5) / u_gridSize;\nfloat tileFactor = u_factor / 4.35;\nvec3 tilePos = vec3((tileUv.x - 0.5) * 4.25, (tileUv.y - 0.5) * 6.01, 0.0);\ntilePos.z = 0.12;\ntilePos *= tileFactor;\nfloat tileLock = __GRID_LOCK__;\npos = mix(pos, tilePos, tileLock);\nfloat introFly = 1.0 - smoothstep(0.0, 1.0, clamp(u_show, 0., 1.));\nfloat chaosMotion = max(clamp(u_motion, 0., 1.) * (1.0 - smoothstep(0.08, 0.88, clamp(u_progress, 0., 1.))), introFly);\nfloat flightPhase = u_time * (0.55 + a_random.y * 0.8) + a_random.x * 9.3;\npos.x += (sin(flightPhase) + cos(flightPhase * 0.43 + a_random.z * 5.1) * 0.55) * 0.24 * chaosMotion;\npos.y += (cos(flightPhase * 0.79) + sin(flightPhase * 0.37) * 0.45) * 0.19 * chaosMotion;\npos.z += sin(flightPhase * 0.61 + a_random.z * 8.7) * 0.38 * chaosMotion;\n// vec3 basePos = pos;");
 tn = tn.replace("mat4 rotMat2 = rotationMatrix(vec3(0., 1., 1.), mod(n + u_time, 3.1416 * 2.));", "float calmFlutter = sin(u_time * (0.22 + a_random.y * 0.25) + a_random.x * 6.2831) * 0.1 + n * 0.045;\nfloat livelyFlutter = sin(u_time * (0.78 + a_random.y * 0.9) + a_random.x * 10.7) * 0.48 + cos(u_time * 0.51 + a_random.z * 8.3) * 0.2;\nvec3 flutterAxis = normalize(mix(vec3(0., 0., 1.), vec3(a_random.x, 0.7, a_random.z), chaosMotion));\nmat4 rotMat2 = rotationMatrix(flutterAxis, mix(calmFlutter, livelyFlutter, chaosMotion) * (1.0 - tileLock));");
-// Hero uses a soft capture field; the assembled page moves one semantic region as a rigid block.
+// Scatter moves the actual tiles after grid lock; both color and depth use tn.
 tn = tn.replace("float dist = smoothstep( 1.25 + abs(max(u_delta.x, u_delta.y)), 0., distance(mPos.xy, m * resolution)); \npos.x += dist * sin(u_time * a_random.y) * (a_random.z*0.35 + u_delta.x) * abs( u_explode - 1.);\npos.y += dist * cos(u_time * a_random.y) * (a_random.z* 0.35 + u_delta.y) * abs( u_explode - 1.);", `vec2 pointerPosition = m * resolution;
-float stageReady = smoothstep(0.72, 0.98, clamp(u_progress, 0., 1.)) * (1.0 - smoothstep(1.04, 1.28, u_progress)) * (1.0 - smoothstep(0.04, 0.42, u_explode));
-float selectedSheet = 1.0 - step(0.5, abs(a_index - u_stagePickId));
-float stageSelected = selectedSheet * stageReady * u_stageOverlay;
-float stageHide = (1.0 - selectedSheet) * u_stageOverlay;
-float documentGrow = smoothstep(0.0, 1.0, clamp(u_stagePickActive, 0., 1.));
-float documentWeight = stageSelected * documentGrow * u_stageLayer;
-float documentScale = 1.0 + documentWeight * u_stageScale;
-// All cell centers and cell geometry receive the same scale and translation.
-pos.xy = u_stageAnchor + (pos.xy - u_stageAnchor) * documentScale;
-pos.xy += (u_stageFollow - u_stageAnchor) * documentWeight * clamp(u_stageAttract, 0., 1.);
-pos.z += documentWeight * u_stageLift;
+pos.xyz += a_stageScatter.xyz * u_stageScatter;
 float heroHover = (1.0 - smoothstep(0.1, 0.46, clamp(u_progress, 0., 1.))) * abs(u_explode - 1.) * (1.0 - introFly);
 vec2 heroP = mPos.xy + vec2(0., 1.);
 vec2 heroToPointer = pointerPosition - heroP;
 float heroDist = 1.0 - smoothstep(0.14, 1.45, length(heroToPointer));
-float heroMagnet = heroDist * heroHover * u_pointerActive;
+float heroMagnet = 0.0;
 float latchAngle = fract(sin(a_index * 12.9898 + 0.37) * 43758.5453) * 6.2831853;
 vec2 latchOffset = vec2(cos(latchAngle), sin(latchAngle)) * (0.07 + a_random.y * 0.08);
 float heroPull = clamp(u_attract * heroMagnet * 1.05, 0.0, 0.86);
 pos.xy += (heroToPointer + latchOffset) * heroPull;
 pos.z += heroMagnet * (0.45 + u_attract * 1.2);
 float dist = heroMagnet;
-v_stageSelected = selectedSheet * stageReady * documentGrow;
 vec2 impD = pos.xy - u_impact.xy;
 float impW = exp(-dot(impD, impD) * 1.7);
 pos.z += u_impact.z * impW;
 pos.xy += normalize(impD + vec2(0.0001)) * abs(u_impact.z) * impW * 0.18 * (1.0 - tileLock);`);
-tn = tn.replace("scale += dist * 0.75 * abs( u_explode - 1.);", "float targetTileScale = u_factor * 6.01 / (4.35 * u_gridSize * 0.1) * 1.06;\nscale = mix(scale, targetTileScale, tileLock);\nscale *= documentScale;\nscale += heroMagnet * u_attract * 0.35;");
+tn = tn.replace("scale += dist * 0.75 * abs( u_explode - 1.);", "float targetTileScale = u_factor * 6.01 / (4.35 * u_gridSize * 0.1) * mix(1.06, 1.0 - u_finaleGap, step(0.999, u_finaleLayout));\nscale = mix(scale, targetTileScale, tileLock);\nscale += heroMagnet * u_attract * 0.35;");
 tn = tn.replace("pos.z += heroMagnet * (0.45 + u_attract * 1.2);", "pos.z += heroMagnet * u_attract * 1.6;");
 tn = tn.replace("scale = mix(scale, scale2, u_progress);\nscale = mix(scale, scale3, max(0., u_progress - 1.));\nscale = mix(scale, scale4, max(0., u_progress - 2.));", "float scale1 = scale;\nscale = mix(scale1, scale2, clamp(u_progress, 0., 1.));\nscale = mix(scale, scale3, clamp(u_progress - 1., 0., 1.));\nscale = mix(scale, scale4, clamp(u_progress - 2., 0., 1.));");
-tn = tn.replace("float selectedSheet = 1.0 - step(0.5, abs(a_index - u_stagePickId));", "vec2 sheetCell = a_cell;\nfloat selectedSheet = step(u_stageRegion.x, sheetCell.x) * step(u_stageRegion.y, sheetCell.y) * step(sheetCell.x, u_stageRegion.z) * step(sheetCell.y, u_stageRegion.w);");
 if (sharpDocuments) {
   tn = tn.replace("mat4 rotMat2 = rotationMatrix(flutterAxis, mix(calmFlutter, livelyFlutter, chaosMotion) * (1.0 - tileLock));", "mat4 rotMat2 = rotationMatrix(vec3(0., 0., 1.), mix(calmFlutter, livelyFlutter, chaosMotion) * 0.28 * (1.0 - tileLock));");
-  tn = tn.replace("scale += heroMagnet * u_attract * 0.35;", "scale += heroMagnet * u_attract * 0.35;\nfloat heroReadable = 1.0 - smoothstep(0.16, 0.72, clamp(u_progress, 0., 1.));\nfloat heroKeep = step(1.0 - u_heroDensity, fract(sin(a_index * 12.9898 + 0.37) * 43758.5453));\nscale *= mix(1.0, 1.7 * heroKeep, heroReadable);");
+  tn = tn.replace("scale += heroMagnet * u_attract * 0.35;", "scale += heroMagnet * u_attract * 0.35;\nfloat heroReadable = 1.0 - smoothstep(0.16, 0.72, clamp(u_progress, 0., 1.));\nfloat heroKeep = step(1.0 - u_heroDensity, a_heroRank);\nscale *= mix(1.0, 1.7 * heroKeep, heroReadable);");
 }
-tn = tn.replace("vec4 mvPosition = vec4( transformed, 1.0 );", "v_stageSelected = 0.0;\nv_cell = a_cell;\nvec4 mvPosition = vec4( transformed, 1.0 );");
-// Overlay draws only the active block; the base document stays filled beneath it.
-tn = tn.replace("instanceMat[0][0] = instanceMat[0][0] * scale;", "instanceMat[0][0] = instanceMat[0][0] * scale * (1.0 - stageHide);");
-tn = tn.replace("instanceMat[1][1] = instanceMat[1][1] * scale;", "instanceMat[1][1] = instanceMat[1][1] * scale * (1.0 - stageHide);");
-tn = tn.replace("instanceMat[2][2] = instanceMat[2][2] * scale;", "instanceMat[2][2] = instanceMat[2][2] * scale * (1.0 - stageHide);");
+tn = tn.replace("vec4 mvPosition = vec4( transformed, 1.0 );", "v_cell = a_cell;\nvec4 mvPosition = vec4( transformed, 1.0 );");
 tn = tn.replace("__GRID_LOCK__", gridLockExpr);
+tn = tn.replace("gl_Position = projectionMatrix * mvPosition;", "mvPosition = heroInteractionPosition(mvPosition, modViewMatrix * vec4(instanceMat[3].xyz,1.0));\ngl_Position = projectionMatrix * mvPosition;");
 // Hero 3D chaos: every leaf of the hero band gets its own tilt (X/Y/Z) and depth, so the band reads as
 // papers scattered in space rather than flat cards. While the intro flight runs, leaves tumble and unwind
 // into that tilt; it fades out as the band assembles into the form (u_progress) and under tileLock.
@@ -4329,8 +4481,8 @@ var exFloatUniform = { id: "u_exFloat", type: "float", value: reducedMotionQuery
 u.heroTiltUniform = heroTiltUniform;
 u.heroDensityUniform = heroDensityUniform;
 u.exFloatUniform = exFloatUniform;
-tn = tn.replace("  instanceMat[3][0] = instanceMat[3][0] + pos.x;", "  float hcW = (1.0 - smoothstep(0.08, 0.6, clamp(u_progress, 0., 1.))) * (1.0 - tileLock) * u_heroTilt;\n  float hcA = fract(sin(a_index * 17.371 + 1.3) * 43758.5453);\n  float hcB = fract(sin(a_index * 29.113 + 4.7) * 43758.5453);\n  float hcC = fract(sin(a_index * 41.927 + 2.1) * 43758.5453);\n  float hcD = fract(sin(a_index * 53.719 + 0.9) * 43758.5453);\n  float hcSpin = introFly * introFly * (3.0 + hcA * 6.0) * (hcB < 0.5 ? -1.0 : 1.0) * u_heroTilt;\n  float hcSway = sin(u_time * (0.25 + hcC * 0.3) + hcD * 6.2831) * 0.12;\n  mat4 heroTiltRot = rotationMatrix(vec3(1., 0., 0.), ((hcA - 0.5) * 2.0 * 1.0 + hcSway) * hcW + hcSpin)\n    * rotationMatrix(vec3(0., 1., 0.), ((hcB - 0.5) * 2.0 * 1.1) * hcW + hcSpin * 0.7)\n    * rotationMatrix(vec3(0., 0., 1.), ((hcC - 0.5) * 2.0 * 0.6) * hcW + hcSpin * 0.35);\n  pos.z += (hcD - 0.5) * 2.4 * hcW;\n  float exStage = 1.0 - smoothstep(1.6, 2.2, clamp(u_progress, 0., 3.));\n  float exW = smoothstep(0.02, 0.7, u_explode) * u_heroTilt * exStage;\n  float exSpin = exW * (2.0 + hcA * 5.0) * (hcB < 0.5 ? -1.0 : 1.0);\n  float exLive = smoothstep(0.02, 0.7, u_explode) * exStage * (1.0 - tileLock) * u_exFloat;\n  float exPh = hcD * 6.2831;\n  float exRate = 0.18 + hcC * 0.25;\n  float exWobX = sin(u_time * exRate + exPh) * 0.55 * exLive;\n  float exWobY = cos(u_time * (exRate * 0.83) + exPh * 1.7) * 0.55 * exLive;\n  float exWobZ = sin(u_time * (exRate * 0.61) + exPh * 2.3) * 0.25 * exLive;\n  mat4 exTiltRot = rotationMatrix(vec3(1., 0., 0.), (hcC - 0.5) * 2.4 * exW + exSpin + exWobX)\n    * rotationMatrix(vec3(0., 1., 0.), (hcA - 0.5) * 2.6 * exW + exSpin * 0.8 + exWobY)\n    * rotationMatrix(vec3(0., 0., 1.), (hcD - 0.5) * 1.6 * exW + exSpin * 0.4 + exWobZ);\n  pos.z += (hcB - 0.5) * 3.0 * exW;\n  pos.x += sin(u_time * (0.21 + hcA * 0.27) + hcB * 6.2831) * 0.35 * exLive;\n  pos.y += cos(u_time * (0.17 + hcB * 0.29) + hcC * 6.2831) * 0.28 * exLive;\n  pos.z += sin(u_time * (0.15 + hcD * 0.22) + hcA * 6.2831) * 0.6 * exLive;\n  instanceMat[3][0] = instanceMat[3][0] + pos.x;");
-tn = tn.replace("    instanceMat *= rotMat2;", "    instanceMat *= rotMat2 * heroTiltRot * exTiltRot;");
+tn = tn.replace("  instanceMat[3][0] = instanceMat[3][0] + pos.x;", "  float hcW = (1.0 - smoothstep(0.08, 0.6, clamp(u_progress, 0., 1.))) * (1.0 - tileLock) * u_heroTilt;\n  float hcA = a_angle.x;\n  float hcB = a_angle.y;\n  float hcC = a_angle.z;\n  float hcD = a_angle.w;\n  float hcSpin = introFly * introFly * (3.0 + hcA * 6.0) * (hcB < 0.5 ? -1.0 : 1.0) * u_heroTilt;\n  float hcSway = sin(u_time * (0.25 + hcC * 0.3) + hcD * 6.2831) * 0.12;\n  mat4 heroTiltRot = rotationMatrix(vec3(1., 0., 0.), ((hcA - 0.5) * 2.0 * 1.0 + hcSway) * hcW + hcSpin)\n    * rotationMatrix(vec3(0., 1., 0.), ((hcB - 0.5) * 2.0 * 1.1) * hcW + hcSpin * 0.7)\n    * rotationMatrix(vec3(0., 0., 1.), ((hcC - 0.5) * 2.0 * 0.6) * hcW + hcSpin * 0.35);\n  pos.z += (hcD - 0.5) * 2.4 * hcW;\n  float exScatter = smoothstep(0.12, 0.7, u_explode) * (1.0 - tileLock);\n  float exW = exScatter * u_heroTilt;\n  float exSpin = exW * (2.0 + hcA * 5.0) * (hcB < 0.5 ? -1.0 : 1.0);\n  float exLive = exScatter * u_exFloat;\n  float exPh = hcD * 6.2831;\n  float exRate = 0.18 + hcC * 0.25;\n  float exWobX = sin(u_time * exRate + exPh) * 0.55 * exLive;\n  float exWobY = cos(u_time * (exRate * 0.83) + exPh * 1.7) * 0.55 * exLive;\n  float exWobZ = sin(u_time * (exRate * 0.61) + exPh * 2.3) * 0.25 * exLive;\n  mat4 exTiltRot = rotationMatrix(vec3(1., 0., 0.), (hcC - 0.5) * 2.4 * exW + exSpin + exWobX)\n    * rotationMatrix(vec3(0., 1., 0.), (hcA - 0.5) * 2.6 * exW + exSpin * 0.8 + exWobY)\n    * rotationMatrix(vec3(0., 0., 1.), (hcD - 0.5) * 1.6 * exW + exSpin * 0.4 + exWobZ);\n  pos.z += (hcB - 0.5) * 3.0 * exW;\n  pos.x += sin(u_time * (0.21 + hcA * 0.27) + hcB * 6.2831) * 0.35 * exLive;\n  pos.y += cos(u_time * (0.17 + hcB * 0.29) + hcC * 6.2831) * 0.28 * exLive;\n  pos.z += sin(u_time * (0.15 + hcD * 0.22) + hcA * 6.2831) * 0.6 * exLive;\n  instanceMat[3][0] = instanceMat[3][0] + pos.x;");
+tn = tn.replace("    instanceMat *= rotMat2;", "    instanceMat *= rotMat2 * heroTiltRot * exTiltRot * rotationMatrix(normalize(vec3(hcA - 0.5, hcB - 0.5, 0.7)), a_stageScatter.w * u_stageScatter);");
 class an extends Re.T {
   constructor({
     fluid: e = null
@@ -4344,44 +4496,7 @@ class an extends Re.T {
       type: "float",
       value: 0
     };
-    this._stagePickTarget = 0;
-    this._stagePickVelocity = 0;
-    this._stagePickLocked = false;
-    this._stagePickReturning = false;
-    this._stagePickUniform = {
-      id: "u_stagePickId",
-      type: "float",
-      value: -1
-    };
-    this._stagePickActiveUniform = {
-      id: "u_stagePickActive",
-      type: "float",
-      value: 0
-    };
-    this._stageAttractUniform = {
-      id: "u_stageAttract",
-      type: "float",
-      value: u.reducedMotion ? 0 : defaultAssembledDocumentMagnetStrength
-    };
-    this._stageLiftUniform = {
-      id: "u_stageLift",
-      type: "float",
-      value: u.reducedMotion ? 0 : defaultAssembledDocumentLift
-    };
-    this._stageScaleUniform = {
-      id: "u_stageScale",
-      type: "float",
-      value: u.reducedMotion ? 0 : defaultAssembledDocumentScale
-    };
-    this._stageLayerUniform = {
-      id: "u_stageLayer",
-      type: "float",
-      value: 1
-    };
-    this._stageRegion = null;
     this._stageHoverQuery = window.matchMedia("(hover: hover) and (pointer: fine)");
-    this._stageLastTime = null;
-    // Reused matrices and vectors: picking mirrors the shader's view-space offset and rotation.
     this._stageView = new It.y();
     this._stageProjection = new It.y();
     this._stageInverse = new It.y();
@@ -4389,17 +4504,31 @@ class an extends Re.T {
     this._stageNear = new He.P();
     this._stageFar = new He.P();
     this._stageHit = new He.P();
-    this._stageScreenAnchor = new He.P();
-    this._stageScreenFollow = new He.P();
-    this._stageFollowUniform = { id: "u_stageFollow", type: "vec2", value: new i.F(0, 0) };
-    this._stageMaxOffsetUniform = { id: "u_stageMaxOffset", type: "float", value: 12 };
-    this._stageRegionUniform = { id: "u_stageRegion", type: "vec4", value: { x: -1, y: -1, z: -1, w: -1 } };
-    this._stageAnchorUniform = { id: "u_stageAnchor", type: "vec2", value: new i.F(0, 0) };
-    this._stageFollowPos = { x: 0, y: 0 };
-    this._stageFollowVel = { x: 0, y: 0 };
-    // DevTuner-adjustable spring rates; maxOffset is measured in CSS pixels.
-    this._stageTune = { growGain: 0.14, growFriction: 0.62, returnGain: 0.18, returnFriction: 0.6, followStiffness: 0.14, followDamping: 0.65, maxOffset: 12 };
-    this._stageOverlayMesh = null;
+    this._scatterScreen = new He.P();
+    this._scatterPrev = null;
+    this._scatterMoved = false;
+    this._scatterLastTime = null;
+    this._scatterDirty = false;
+    this._scatterStage = null;
+    this._scatterTune = { radius: 45, distance: 25, returnSeconds: 1 };
+    // Separate from the assembled pages: their resets must not consume hero input.
+    this._heroPointerState = {};
+    this._heroMotion = null;
+    this._heroLastFrame = null;
+    this._heroMagnetUniform = { id: "u_heroMagnetWeight", type: "float", value: 0 };
+    this._idleTune = { strength: 1 };
+    this._finaleGapUniform = { id: "u_finaleGap", type: "float", value: 0.04 };
+    this._idleOffset = new He.P();
+    this._idleRotation = new He.P();
+    this._scatterUniform = { id: "u_stageScatter", type: "float", value: 0 };
+    this._stampInkUniform = { id: "u_stampInk", type: "float", value: 0 };
+    this._finaleVisibilityUniform = { id: "u_finaleVisibility", type: "float", value: 1 };
+    this._finalePaperUniform = { id: "u_finalePaper", type: "float", value: 0 };
+    this._finaleLayoutUniform = { id: "u_finaleLayout", type: "float", value: 0 };
+    this._visaOffsetUniform = { id: "u_visaOffset", type: "vec2", value: new i.F(0, 0) };
+    this._visaScaleUniform = { id: "u_visaScale", type: "float", value: 1 };
+    this._visaAngleUniform = { id: "u_visaAngle", type: "float", value: 0 };
+    this._visaShadowUniform = { id: "u_visaShadow", type: "float", value: 0 };
     this._visaRevealUniform = {
       id: "u_visaReveal",
       type: "float",
@@ -4407,6 +4536,10 @@ class an extends Re.T {
     };
     this._grid = u.isMobile ? 30 : 40; // visible sheets form an even sub-grid of the 100x100 simulation
     this._nb = this._grid * this._grid;
+    this._scatterValues = new Float32Array(this._nb * 4);
+    this._scatterTargets = new Float32Array(this._nb * 4);
+    this._scatterVelocities = new Float32Array(this._nb * 4);
+    this._scatterHitTimes = new Float64Array(this._nb);
     this._loaded = false;
     this.objectVisible = true;
     this.active = false;
@@ -4619,7 +4752,7 @@ class an extends Re.T {
           }
         },
         vertexShader: sn,
-        fragmentShader: "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D t_position;\nuniform sampler2D t_oPos;\nuniform sampler2D t_velocity;\nuniform sampler2D t_params;\nuniform sampler2D t_params2;\n\nuniform float u_factor;\nuniform float u_length;\nuniform float u_show;\nuniform float u_explode;\nuniform float u_progress;\nuniform float u_rendered;\n\nvarying vec2 vUv;\n\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return step(inValue , 0.5) * inValue + step(0.5,outValue) * outValue;\n}\n\nvoid main() {\n  vec4 tOpos = texture2D(t_oPos, vUv);\n  vec3 pos = tOpos.xyz;\n\n  if (u_rendered > 0.) {\n    vec4 tVelocity = texture2D(t_velocity, vUv);\n    pos += tVelocity.xyz;\n\n  } else {\n    vec4 tParams = texture2D(t_params, vUv);\n    vec4 tParams2 = texture2D(t_params2, vUv);\n\n    // Show Animation -----\n    float d = 0.00005;\n    float d2 = 0.0005;\n    float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * tParams.z));\n    showVal = qinticInOut(showVal);\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + u_explode * tParams.y;\n    float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + min(1., max(0., (u_explode * (u_length - 1.)) - d2 * tParams2.w));\n\n    pos = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5)).xyz;\n    vec3 basePos = pos;\n\n    pos.x = (pos.x - 0.5) * 2. * radius;\n    pos.y = (pos.y - 0.5) * 2. * radius;\n    pos.z = (pos.z - 0.5) * 2. * radius;\n\n    vec3 pos2 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5)).xyz;\n    pos2.x = (pos2.x - 0.5) * 2. * radius;\n    pos2.y = (pos2.y - 0.5) * 2. * radius;\n    pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n    vec3 pos3 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos3.x = (pos3.x - 0.5) * 2. * radius;\n    pos3.y = (pos3.y - 0.5) * 2. * radius;\n    pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n    vec3 pos4 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos4.x = (pos4.x - 0.5) * 2. * radius;\n    pos4.y = (pos4.y - 0.5) * 2. * radius;\n    pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n    pos = mix(pos, pos2, u_progress);\n    pos = mix(pos, pos3, max(0., u_progress - 1.));\n    pos = mix(pos, pos4, max(0., u_progress - 2.));\n  }\n\n  gl_FragColor = vec4(pos, 1.);\n}\n"
+        fragmentShader: "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D t_position;\nuniform sampler2D t_oPos;\nuniform sampler2D t_velocity;\nuniform sampler2D t_params;\nuniform sampler2D t_params2;\n\nuniform float u_factor;\nuniform float u_length;\nuniform float u_show;\nuniform float u_explode;\nuniform float u_progress;\nuniform float u_rendered;\n\nvarying vec2 vUv;\n\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return step(inValue , 0.5) * inValue + step(0.5,outValue) * outValue;\n}\n\nvoid main() {\n  vec4 tOpos = texture2D(t_oPos, vUv);\n  vec3 pos = tOpos.xyz;\n\n  if (u_rendered > 0.) {\n    vec4 tVelocity = texture2D(t_velocity, vUv);\n    pos += tVelocity.xyz;\n\n  } else {\n    vec4 tParams = texture2D(t_params, vUv);\n    vec4 tParams2 = texture2D(t_params2, vUv);\n\n    // Show Animation -----\n    float d = 0.00005;\n    float d2 = 0.0005;\n    float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * tParams.z));\n    showVal = qinticInOut(showVal);\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + u_explode * tParams.y;\n    float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + min(1., max(0., (u_explode * (u_length - 1.)) - d2 * tParams2.w));\n\n    pos = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5)).xyz;\n    vec3 basePos = pos;\n\n    pos.x = (pos.x - 0.5) * 2. * radius;\n    pos.y = (pos.y - 0.5) * 2. * radius;\n    pos.z = (pos.z - 0.5) * 2. * radius;\n\n    vec3 pos2 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5)).xyz;\n    pos2.x = (pos2.x - 0.5) * 2. * radius;\n    pos2.y = (pos2.y - 0.5) * 2. * radius;\n    pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n    vec3 pos3 = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos3.x = (pos3.x - 0.5) * 2. * radius;\n    pos3.y = (pos3.y - 0.5) * 2. * radius;\n    pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n    vec3 pos4 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos4.x = (pos4.x - 0.5) * 2. * radius;\n    pos4.y = (pos4.y - 0.5) * 2. * radius;\n    pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n    pos = mix(pos, pos2, u_progress);\n    pos = mix(pos, pos3, max(0., u_progress - 1.));\n    pos = mix(pos, pos4, max(0., u_progress - 2.));\n  }\n\n  gl_FragColor = vec4(pos, 1.);\n}\n"
       }),
       scene: true
     });
@@ -4682,11 +4815,11 @@ class an extends Re.T {
           }
         },
         vertexShader: sn,
-        fragmentShader: "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D t_oTarget;\nuniform sampler2D t_position;\nuniform sampler2D t_oVelocity;\nuniform sampler2D t_params;\nuniform sampler2D t_params2;\nuniform sampler2D t_params3;\n\nuniform vec2 u_resolution;\nuniform float u_factor;\nuniform float u_length;\nuniform float u_show;\nuniform float u_explode;\nuniform float u_progress;\nuniform float u_spring;\nuniform float u_friction;\nuniform float u_rendered;\nuniform float u_delay;\n\nvarying vec2 vUv;\n\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return step(inValue , 0.5) * inValue + step(0.5,outValue) * outValue;\n}\n\nvoid main() {\n  float vx = 0.;\n  float vy = 0.;\n  float vz = 0.;\n\n  if (u_rendered > 0.) {\n    vec4 tParams = texture2D(t_params, vUv);\n    vec4 tParams2 = texture2D(t_params2, vUv);\n    vec4 tParams3 = texture2D(t_params3, vUv);\n\n    // Show Animation -----\n    float d = 0.00005;\n    float d3 = 0.00015;\n    float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * tParams.z));\n    showVal = qinticInOut(showVal);\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + u_explode * tParams.y;\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w)) * 6.;\n    float radius = u_factor;\n\n    vec3 pos = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5)).xyz;\n    vec3 basePos = pos;\n\n    pos.x = (pos.x - 0.5) * 2. * radius;\n    pos.y = (pos.y - 0.5) * 2. * radius;\n    pos.z = (pos.z - 0.5) * 2. * radius;\n\n    vec3 pos2 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5)).xyz;\n    pos2.x = (pos2.x - 0.5) * 2. * radius;\n    pos2.y = (pos2.y - 0.5) * 2. * radius;\n    pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n    vec3 pos3 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos3.x = (pos3.x - 0.5) * 2. * radius;\n    pos3.y = (pos3.y - 0.5) * 2. * radius;\n    pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n    vec3 pos4 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos4.x = (pos4.x - 0.5) * 2. * radius;\n    pos4.y = (pos4.y - 0.5) * 2. * radius;\n    pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xy *= u_resolution * 2.;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xyz *= vec3(u_resolution * 2., u_resolution.x * 2.);\n\n    float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for dekstop\n    pos = mix(pos, pos2, min(1., max(0., ((u_progress * (1. + d4 * (u_length - 1.))) - d4 * tParams2.x))));\n    pos = mix(pos, pos3, min(1., max(0., ((max(0., u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y))));\n    pos = mix(pos, pos4, min(1., max(0., ((max(0., u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z))));\n    pos = mix(pos, pos * tParams3.x, min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w)));\n\n    vec4 tOtarget = texture2D(t_oTarget, vUv);\n    vec4 tOVelocity = texture2D(t_oVelocity, vUv);\n\n    float spring = u_spring + tParams.w;\n    float friction = u_friction;\n\n    float dx = pos.x - tOtarget.x;\n    float dy = pos.y - tOtarget.y;\n    float dz = pos.z - tOtarget.z;\n\n    float ax = dx * spring;\n    float ay = dy * spring;\n    float az = dz * spring;\n\n    vx = tOVelocity.x + ax;\n    vy = tOVelocity.y + ay;\n    vz = tOVelocity.z + az;\n\n    vx *= friction;\n    vy *= friction;\n    vz *= friction;\n  }\n\n  gl_FragColor = vec4(vec3(vx, vy, vz), 1.);\n}\n"
+        fragmentShader: "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D t_oTarget;\nuniform sampler2D t_position;\nuniform sampler2D t_oVelocity;\nuniform sampler2D t_params;\nuniform sampler2D t_params2;\nuniform sampler2D t_params3;\n\nuniform vec2 u_resolution;\nuniform float u_factor;\nuniform float u_length;\nuniform float u_show;\nuniform float u_explode;\nuniform float u_progress;\nuniform float u_spring;\nuniform float u_friction;\nuniform float u_rendered;\nuniform float u_delay;\n\nvarying vec2 vUv;\n\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return step(inValue , 0.5) * inValue + step(0.5,outValue) * outValue;\n}\n\nvoid main() {\n  float vx = 0.;\n  float vy = 0.;\n  float vz = 0.;\n\n  if (u_rendered > 0.) {\n    vec4 tParams = texture2D(t_params, vUv);\n    vec4 tParams2 = texture2D(t_params2, vUv);\n    vec4 tParams3 = texture2D(t_params3, vUv);\n\n    // Show Animation -----\n    float d = 0.00005;\n    float d3 = 0.00015;\n    float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * tParams.z));\n    showVal = qinticInOut(showVal);\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + u_explode * tParams.y;\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w)) * 6.;\n    float radius = u_factor;\n\n    vec3 pos = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5)).xyz;\n    vec3 basePos = pos;\n\n    pos.x = (pos.x - 0.5) * 2. * radius;\n    pos.y = (pos.y - 0.5) * 2. * radius;\n    pos.z = (pos.z - 0.5) * 2. * radius;\n\n    vec3 pos2 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5)).xyz;\n    pos2.x = (pos2.x - 0.5) * 2. * radius;\n    pos2.y = (pos2.y - 0.5) * 2. * radius;\n    pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n    vec3 pos3 = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos3.x = (pos3.x - 0.5) * 2. * radius;\n    pos3.y = (pos3.y - 0.5) * 2. * radius;\n    pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n    vec3 pos4 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos4.x = (pos4.x - 0.5) * 2. * radius;\n    pos4.y = (pos4.y - 0.5) * 2. * radius;\n    pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xy *= u_resolution * 2.;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xyz *= vec3(u_resolution * 2., u_resolution.x * 2.);\n\n    float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for dekstop\n    pos = mix(pos, pos2, min(1., max(0., ((u_progress * (1. + d4 * (u_length - 1.))) - d4 * tParams2.x))));\n    pos = mix(pos, pos3, min(1., max(0., ((max(0., u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y))));\n    pos = mix(pos, pos4, min(1., max(0., ((max(0., u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z))));\n    pos = mix(pos, pos * tParams3.x, min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w)));\n\n    vec4 tOtarget = texture2D(t_oTarget, vUv);\n    vec4 tOVelocity = texture2D(t_oVelocity, vUv);\n\n    float spring = u_spring + tParams.w;\n    float friction = u_friction;\n\n    float dx = pos.x - tOtarget.x;\n    float dy = pos.y - tOtarget.y;\n    float dz = pos.z - tOtarget.z;\n\n    float ax = dx * spring;\n    float ay = dy * spring;\n    float az = dz * spring;\n\n    vx = tOVelocity.x + ax;\n    vy = tOVelocity.y + ay;\n    vz = tOVelocity.z + az;\n\n    vx *= friction;\n    vy *= friction;\n    vz *= friction;\n  }\n\n  gl_FragColor = vec4(vec3(vx, vy, vz), 1.);\n}\n"
       }),
       scene: true
     });
-    this._simulationSpring.material.fragmentShader = this._simulationSpring.material.fragmentShader.replace("float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for dekstop\n    pos = mix(pos, pos2, min(1., max(0., ((u_progress * (1. + d4 * (u_length - 1.))) - d4 * tParams2.x))));\n    pos = mix(pos, pos3, min(1., max(0., ((max(0., u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y))));\n    pos = mix(pos, pos4, min(1., max(0., ((max(0., u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z))));", "float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for desktop\n    vec3 pos1 = pos;\n    pos1.x *= " + heroBandStretch + ";\n    float introAssemble = clamp((u_progress * (1. + d4 * (u_length - 1.))) - d4 * tParams2.x, 0., 1.);\n    float streamFlow = clamp(((u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y, 0., 1.);\n    float finalResolve = clamp(((u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z, 0., 1.);\n    introAssemble = qinticInOut(introAssemble);\n    vec2 introDelta = pos2.xy - pos1.xy;\n    vec2 introTangent = vec2(-introDelta.y, introDelta.x) / (length(introDelta) + 0.001);\n    pos = mix(pos1, pos2, introAssemble);\n    pos.xy += introTangent * sin(introAssemble * 3.14159265) * (0.16 + tParams.x * 0.22);\n    pos = mix(pos, pos3, streamFlow);\n    pos = mix(pos, pos4, finalResolve);\nfloat flyOrder = clamp(tParams.z / max(u_length, 1.0), 0., 1.);\nfloat flyT = clamp((u_show - flyOrder * 0.5) / 0.5, 0., 1.);\nfloat flyLeft = pow(1.0 - flyT, 2.6);\nfloat flyH1 = fract(sin(dot(vUv, vec2(12.9898, 78.233))) * 43758.5453);\nfloat flyH2 = fract(sin(dot(vUv, vec2(39.3468, 11.135))) * 43758.5453);\nfloat flyAngle = flyH1 * 6.2831853 + tParams.x * 1.5;\nvec2 flyDir = vec2(cos(flyAngle), sin(flyAngle));\nvec2 flyPerp = vec2(-flyDir.y, flyDir.x);\nfloat flyDistance = (5.5 + flyH2 * 3.5) * flyLeft;\nfloat flyArc = sin(flyT * 3.14159265) * (flyH2 - 0.5) * 2.2;\npos.xy += flyDir * flyDistance + flyPerp * flyArc * (0.4 + flyLeft);\npos.z += (flyH2 - 0.5) * 3.0 * flyLeft;");
+    this._simulationSpring.material.fragmentShader = this._simulationSpring.material.fragmentShader.replace("float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for dekstop\n    pos = mix(pos, pos2, min(1., max(0., ((u_progress * (1. + d4 * (u_length - 1.))) - d4 * tParams2.x))));\n    pos = mix(pos, pos3, min(1., max(0., ((max(0., u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y))));\n    pos = mix(pos, pos4, min(1., max(0., ((max(0., u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z))));", "float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for desktop\n    vec3 pos1 = pos;\n    pos1.x *= " + heroBandStretch + ";\n    float introAssemble = clamp((u_progress * (1. + d4 * (u_length - 1.))) - d4 * tParams2.x, 0., 1.);\n    float stampResolve = clamp(((u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y, 0., 1.);\n    float finalResolve = clamp(((u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z, 0., 1.);\n    introAssemble = qinticInOut(introAssemble);\n    vec2 introDelta = pos2.xy - pos1.xy;\n    vec2 introTangent = vec2(-introDelta.y, introDelta.x) / (length(introDelta) + 0.001);\n    pos = mix(pos1, pos2, introAssemble);\n    pos.xy += introTangent * sin(introAssemble * 3.14159265) * (0.16 + tParams.x * 0.22);\n    pos = mix(pos, pos3, stampResolve);\n    pos = mix(pos, pos4, finalResolve);\nfloat flyOrder = clamp(tParams.z / max(u_length, 1.0), 0., 1.);\nfloat flyT = clamp((u_show - flyOrder * 0.5) / 0.5, 0., 1.);\nfloat flyLeft = pow(1.0 - flyT, 2.6);\nfloat flyH1 = fract(sin(dot(vUv, vec2(12.9898, 78.233))) * 43758.5453);\nfloat flyH2 = fract(sin(dot(vUv, vec2(39.3468, 11.135))) * 43758.5453);\nfloat flyAngle = flyH1 * 6.2831853 + tParams.x * 1.5;\nvec2 flyDir = vec2(cos(flyAngle), sin(flyAngle));\nvec2 flyPerp = vec2(-flyDir.y, flyDir.x);\nfloat flyDistance = (5.5 + flyH2 * 3.5) * flyLeft;\nfloat flyArc = sin(flyT * 3.14159265) * (flyH2 - 0.5) * 2.2;\npos.xy += flyDir * flyDistance + flyPerp * flyArc * (0.4 + flyLeft);\npos.z += (flyH2 - 0.5) * 3.0 * flyLeft;");
     this._simulationSpring.material.uniforms.t_position.value = u.WebGL.assets.textures.document_position_exr;
     this._simulationSpring.material.uniforms.t_position.value.minFilter = this._simulationSpring.material.uniforms.t_position.value.magFilter = Le.TyD;
     this._simulationSpring.material.uniforms.t_position.value.flipY = true;
@@ -4696,11 +4829,11 @@ class an extends Re.T {
   _setupGeometry() {
     u.WebGL.assets.models.document.scene.traverse(e => {
       if (e.type === "Mesh") {
-        this._geometry = e.geometry.clone();
+        this._geometry = documentMosaicGeometry(e.geometry);
       }
     });
   }
-  _setupMaterial(overlay = false) {
+  _setupMaterial() {
     this._material = new jt({
       transparent: true,
       customUniforms: [{
@@ -4831,7 +4964,19 @@ class an extends Re.T {
         id: "u_impact",
         type: "vec3",
         value: this._impact
-      }, this._stagePickUniform, this._stagePickActiveUniform, this._stageAttractUniform, this._stageLiftUniform, this._stageScaleUniform, this._stageLayerUniform, this._visaRevealUniform, this._pointerActiveUniform, this._stageFollowUniform, this._stageMaxOffsetUniform, this._stageRegionUniform, this._stageAnchorUniform, heroTiltUniform, heroDensityUniform, exFloatUniform, { id: "u_stageOverlay", type: "float", value: overlay ? 1 : 0 }],
+      }, this._visaRevealUniform, this._finaleLayoutUniform, this._visaOffsetUniform, this._visaScaleUniform, this._visaAngleUniform, this._visaShadowUniform, this._finaleGapUniform, this._finalePaperUniform, this._finaleVisibilityUniform, this._pointerActiveUniform, this._heroMagnetUniform, heroTiltUniform, heroDensityUniform, exFloatUniform, this._scatterUniform, this._stampInkUniform, {
+        id: "t_stamp",
+        type: "sampler2D",
+        value: u.WebGL.assets.textures.stamp_mark
+      }, {
+        id: "u_stampPlacement",
+        type: "vec3",
+        value: new He.P(STAMP_PLACEMENT.x, STAMP_PLACEMENT.y, STAMP_PLACEMENT.size)
+      }, {
+        id: "u_stampAngle",
+        type: "float",
+        value: STAMP_PLACEMENT.angle
+      }],
       onBeforeCompile: function (e) {
         for (let t = 0; t < this._customUniforms.length; t++) {
           const n = this._customUniforms[t];
@@ -4843,7 +4988,8 @@ ${e.fragmentShader}`;
         }
         e.vertexShader = nn + e.vertexShader;
         e.vertexShader = on + e.vertexShader;
-        e.vertexShader = en + e.vertexShader;
+        Object.assign(e.uniforms, heroInteractionUniforms);
+        e.vertexShader = heroInteractionDecl + en + e.vertexShader;
         e.vertexShader = rn + e.vertexShader;
         e.vertexShader = "attribute vec4 a_random;\n" + e.vertexShader;
         e.vertexShader = "attribute vec4 a_angle;\n" + e.vertexShader;
@@ -4851,30 +4997,33 @@ ${e.fragmentShader}`;
         e.vertexShader = "attribute vec2 a_cell;\n" + e.vertexShader;
         e.vertexShader = "varying vec2 v_id;\n" + e.vertexShader;
         e.vertexShader = "varying vec2 v_cell;\n" + e.vertexShader;
-        e.vertexShader = "varying float v_stageSelected;\n" + e.vertexShader;
+        e.vertexShader = "attribute vec4 a_stageScatter;\n" + e.vertexShader;
         e.vertexShader = "varying vec3 v_pos;\n" + e.vertexShader;
         e.vertexShader = "varying float v_hover;\n" + e.vertexShader;
         e.vertexShader = "varying vec2 v_paperUv;\n" + e.vertexShader;
         e.vertexShader = "varying float v_paperFace;\n" + e.vertexShader;
         e.vertexShader = "attribute float a_order;\n" + e.vertexShader;
-        e.vertexShader = "attribute float a_index;\n" + e.vertexShader;
+        // Recover the simulation ID from its UV: leave a vertex slot for hero poses.
+        e.vertexShader = e.vertexShader.replace("void main() {", "void main() {\nfloat a_index = floor(a_id.y * 200.0) * 100.0 + floor(a_id.x * 200.0);");
+        e.vertexShader = "attribute float a_fill; varying float v_tileFill;\n" + e.vertexShader;
+        e.vertexShader = e.vertexShader.replace("void main() {", "void main() {\nv_tileFill = a_fill;");
         e.vertexShader = e.vertexShader.replace("#include <project_vertex>", tn);
         e.vertexShader = paperVertexDecl + e.vertexShader;
         e.vertexShader = e.vertexShader.replace("vec4 mvPosition = vec4( transformed, 1.0 );", paperVertexShape("a_angle", 0.09, true));
         e.vertexShader = e.vertexShader.replace("v_hover = dist;", "v_hover = dist;\nv_paperNormal = normalize(mat3(modViewMatrix[0].xyz, modViewMatrix[1].xyz, modViewMatrix[2].xyz) * mat3(instanceMat[0].xyz, instanceMat[1].xyz, instanceMat[2].xyz) * paperN);");
         e.vertexShader = e.vertexShader.replace("#include <worldpos_vertex>", "#define GLSLIFY 1\n#if defined( USE_ENVMAP ) || defined( DISTANCE ) || defined ( USE_SHADOWMAP ) || defined ( USE_TRANSMISSION )\n\tvec4 worldPosition = vec4( transformed, 1.0 );\n\t#ifdef USE_INSTANCING\n\t\tworldPosition = instanceMat * worldPosition;\n\t#endif\n\tworldPosition = modelMatrix * worldPosition;\n#endif");
         e.fragmentShader = "varying vec3 v_pos;\n" + e.fragmentShader;
+        e.fragmentShader = "varying float v_tileFill;\n" + e.fragmentShader;
         e.fragmentShader = "varying vec2 v_id;\n" + e.fragmentShader;
         e.fragmentShader = "varying vec2 v_cell;\n" + e.fragmentShader;
-        e.fragmentShader = "varying float v_stageSelected;\n" + e.fragmentShader;
         e.fragmentShader = "varying float v_hover;\n" + e.fragmentShader;
         e.fragmentShader = "varying vec2 v_paperUv;\n" + e.fragmentShader;
         e.fragmentShader = "varying float v_paperFace;\n" + e.fragmentShader;
-        e.fragmentShader = e.fragmentShader.replace("#include <output_fragment>", "#define GLSLIFY 1\nvec3 col1 = texture2D(t_color, v_id).xyz;\nvec3 col2 = texture2D(t_color, vec2(v_id.x + 0.5, v_id.y)).xyz;\nvec3 col3 = texture2D(t_color, vec2(v_id.x + 0.5, v_id.y + 0.5)).xyz;\nvec3 col4 = texture2D(t_color, vec2(v_id.x + 0.5, v_id.y + 0.5)).xyz;\nvec3 col = mix(col1, col2, clamp(u_progress, 0., 1.));\ncol = mix(col, col3, clamp(u_progress - 1., 0., 1.));\ncol = mix(col, col4, clamp(u_progress - 2., 0., 1.));\n// col += v_hover * 0.5;\ncol = mix(col, vec3(0.45), max(0., v_hover - u_explode) * abs( u_explode - 1.));\n\n#ifdef OPAQUE\ndiffuseColor.a = 1.0;\n#endif\n// https://github.com/mrdoob/three.js/pull/22425\n#ifdef USE_TRANSMISSION\ndiffuseColor.a *= transmissionAlpha + 0.1;\n#endif\noutgoingLight.rgb = col.rgb * u_colorFactor;\n// outgoingLight.rgb = vec3(smoothstep(-7., 5., v_pos.z));\n// outgoingLight.rgb = vec3(step(1., v_pos.y / (u_resolution.y * 0.5)));\n// outgoingLight.rgb = vec3(v_pos.x / (u_resolution.x * 0.5));\n// outgoingLight.rgb = vec3(v_pos.y / (u_resolution.y * 0.5));\n// float alpha = diffuseColor.a * mix(smoothstep(-8., 5., v_pos.z), 1., u_explode);\nfloat alpha = diffuseColor.a * smoothstep(-4.5, 4., v_pos.z);\ngl_FragColor = vec4( outgoingLight, alpha );");
+        e.fragmentShader = e.fragmentShader.replace("#include <output_fragment>", "#define GLSLIFY 1\nvec3 col1 = texture2D(t_color, v_id).xyz;\nvec3 col2 = texture2D(t_color, vec2(v_id.x + 0.5, v_id.y)).xyz;\nvec3 col3 = texture2D(t_color, vec2(v_id.x, v_id.y + 0.5)).xyz;\nvec3 col4 = texture2D(t_color, vec2(v_id.x + 0.5, v_id.y + 0.5)).xyz;\nvec3 col = mix(col1, col2, clamp(u_progress, 0., 1.));\ncol = mix(col, col3, clamp(u_progress - 1., 0., 1.));\ncol = mix(col, col4, clamp(u_progress - 2., 0., 1.));\n// col += v_hover * 0.5;\ncol = mix(col, vec3(0.45), max(0., v_hover - u_explode) * abs( u_explode - 1.));\n\n#ifdef OPAQUE\ndiffuseColor.a = 1.0;\n#endif\n// https://github.com/mrdoob/three.js/pull/22425\n#ifdef USE_TRANSMISSION\ndiffuseColor.a *= transmissionAlpha + 0.1;\n#endif\noutgoingLight.rgb = col.rgb * u_colorFactor;\n// outgoingLight.rgb = vec3(smoothstep(-7., 5., v_pos.z));\n// outgoingLight.rgb = vec3(step(1., v_pos.y / (u_resolution.y * 0.5)));\n// outgoingLight.rgb = vec3(v_pos.x / (u_resolution.x * 0.5));\n// outgoingLight.rgb = vec3(v_pos.y / (u_resolution.y * 0.5));\n// float alpha = diffuseColor.a * mix(smoothstep(-8., 5., v_pos.z), 1., u_explode);\nfloat alpha = diffuseColor.a * mix(smoothstep(-4.5, 4., v_pos.z), 1.0, u_finaleLayout) * u_finaleVisibility;\ngl_FragColor = vec4( outgoingLight, alpha );");
         e.fragmentShader = e.fragmentShader.replace("outgoingLight.rgb = col.rgb * u_colorFactor;", paperFragmentSurface("col.rgb * u_colorFactor", 0.35, 0.5, true) + "\noutgoingLight.rgb = paperLit;");
         Object.assign(e.uniforms, paperTune);
         e.fragmentShader = paperFragmentDecl + e.fragmentShader;
-        e.fragmentShader = e.fragmentShader.replace("void main() {", "void main() {\nif (u_stageOverlay > 0.5 && v_stageSelected < 0.0001) discard;");
+        e.vertexShader = e.vertexShader.replace("gl_Position = projectionMatrix * mvPosition;", "v_paperNormal = heroInteractionNormal(v_paperNormal);\ngl_Position = projectionMatrix * mvPosition;");
       }
     });
     this._material.customUniforms[0].value = u.WebGL.assets.textures.document_position_exr;
@@ -4892,6 +5041,7 @@ ${e.fragmentShader}`;
     this._material.needsUpdate = true;
   }
   _setupMesh() {
+    attachHeroInteraction(this._geometry, this._nb);
     this._mesh = new Lt.S(this._geometry, this._material, this._nb);
     const e = new It.y();
     const t = new He.P();
@@ -4925,31 +5075,26 @@ ${e.fragmentShader}`;
       s[i * 4 + 2] = Math.random();
       s[i * 4 + 3] = Math.random();
       l[i] = h;
+      this._geometry.attributes.a_heroRank.array[i] = heroHash(h * 12.9898 + .37);
       c[i] = 0;
       o[i * 4] = i % 2 == 0 ? Math.random() : Math.random() * -1;
       o[i * 4 + 1] = Math.random() * 0.8 + 0.2;
       o[i * 4 + 2] = u.isMobile ? Math.random() * 0.5 : Math.random() * 0.5 + 0.5;
       o[i * 4 + 3] = 0;
+      // The velocity pass uses the same random drift as this visible instance.
+      this._tParams3.image.data[h * 4 + 1] = o[i * 4];
+      this._tParams3.image.data[h * 4 + 2] = o[i * 4 + 1];
+      this._tParams3.image.data[h * 4 + 3] = o[i * 4 + 2];
     }
+    this._tParams3.needsUpdate = true;
     this._geometry.setAttribute("a_index", new kt.l(l, 1));
     this._geometry.setAttribute("a_order", new kt.l(c, 1));
     this._geometry.setAttribute("a_id", new kt.l(a, 2));
     this._geometry.setAttribute("a_cell", new kt.l(cell, 2));
     this._geometry.setAttribute("a_angle", new kt.l(s, 4));
     this._geometry.setAttribute("a_random", new kt.l(o, 4));
-    // Draw the moving block above the intact document, retaining its master-form texture.
-    const baseMaterial = this._material;
-    this._setupMaterial(true);
-    const overlayMaterial = this._material;
-    const baseUniforms = new Map(baseMaterial.customUniforms.map(uniform => [uniform.id, uniform]));
-    overlayMaterial._customUniforms = overlayMaterial.customUniforms.map(uniform => uniform.id === "u_stageOverlay" ? uniform : baseUniforms.get(uniform.id) || uniform);
-    overlayMaterial.needsUpdate = true;
-    this._material = baseMaterial;
-    this._stageOverlayMesh = new Lt.S(this._geometry, overlayMaterial, this._nb);
-    this._stageOverlayMesh.instanceMatrix = this._mesh.instanceMatrix;
-    this._stageOverlayMesh.frustumCulled = false;
-    this._stageOverlayMesh.visible = false;
-    this._stageOverlayMesh.renderOrder = 3;
+    this._scatterAttribute = new kt.l(this._scatterValues, 4);
+    this._geometry.setAttribute("a_stageScatter", this._scatterAttribute);
     this._depthMaterial = new Bt({
       transparent: true,
       customUniforms: {
@@ -5061,17 +5206,12 @@ ${e.fragmentShader}`;
           type: "vec3",
           value: this._impact
         },
-        u_stagePickId: this._stagePickUniform,
-        u_stagePickActive: this._stagePickActiveUniform,
-        u_stageAttract: this._stageAttractUniform,
-        u_stageLift: this._stageLiftUniform,
-        u_stageScale: this._stageScaleUniform,
-        u_stageLayer: this._stageLayerUniform,
-        u_stageRegion: this._stageRegionUniform,
-        u_stageAnchor: this._stageAnchorUniform,
-        u_stageFollow: this._stageFollowUniform,
-        u_stageOverlay: { type: "float", value: 0 },
+        u_finaleVisibility: this._finaleVisibilityUniform,
+        u_finaleLayout: this._finaleLayoutUniform,
+        u_finaleGap: this._finaleGapUniform,
+        u_stageScatter: this._scatterUniform,
         u_pointerActive: this._pointerActiveUniform,
+        u_heroMagnetWeight: this._heroMagnetUniform,
         u_heroTilt: heroTiltUniform,
         u_heroDensity: heroDensityUniform,
         u_exFloat: exFloatUniform
@@ -5079,7 +5219,8 @@ ${e.fragmentShader}`;
       onBeforeCompile: function (e) {
         e.vertexShader = nn + e.vertexShader;
         e.vertexShader = on + e.vertexShader;
-        e.vertexShader = en + e.vertexShader;
+        Object.assign(e.uniforms, heroInteractionUniforms);
+        e.vertexShader = heroInteractionDecl + en + e.vertexShader;
         e.vertexShader = rn + e.vertexShader;
         e.vertexShader = "attribute vec4 a_random;\n" + e.vertexShader;
         e.vertexShader = "attribute vec4 a_angle;\n" + e.vertexShader;
@@ -5087,56 +5228,61 @@ ${e.fragmentShader}`;
         e.vertexShader = "attribute vec2 a_cell;\n" + e.vertexShader;
         e.vertexShader = "varying vec2 v_id;\n" + e.vertexShader;
         e.vertexShader = "varying vec2 v_cell;\n" + e.vertexShader;
-        e.vertexShader = "varying float v_stageSelected;\n" + e.vertexShader;
+        e.vertexShader = "attribute vec4 a_stageScatter;\n" + e.vertexShader;
         e.vertexShader = "varying vec3 v_pos;\n" + e.vertexShader;
         e.vertexShader = "varying float v_hover;\n" + e.vertexShader;
         e.vertexShader = "attribute float a_order;\n" + e.vertexShader;
-        e.vertexShader = "attribute float a_index;\n" + e.vertexShader;
+        // Recover the simulation ID from its UV: leave a vertex slot for hero poses.
+        e.vertexShader = e.vertexShader.replace("void main() {", "void main() {\nfloat a_index = floor(a_id.y * 200.0) * 100.0 + floor(a_id.x * 200.0);");
+        e.vertexShader = "attribute float a_fill; varying float v_tileFill;\n" + e.vertexShader;
+        e.vertexShader = e.vertexShader.replace("void main() {", "void main() {\nv_tileFill = a_fill;");
         e.vertexShader = e.vertexShader.replace("#include <project_vertex>", tn);
       }
     });
+    this._depthMaterial.fragmentShader = "varying float v_tileFill;\n" + this._depthMaterial.fragmentShader.replace("void main() {", "void main() {\n  if (u_finaleVisibility < 0.001 || (v_tileFill > 0.5 && u_finaleLayout < 0.999) || (v_tileFill < 0.5 && u_finaleLayout >= 0.999)) discard;");
     this._mesh.customDepthMaterial = this._depthMaterial;
-    this.add(this._stageOverlayMesh);
     this.add(this._mesh);
   }
   activate({
     delay: e = 0
   } = {}) {
     if (!this.active) {
-      const t = u.reducedMotion ? 0 : (u.introDuration ?? (u.isMobile ? 3.2 : 5.5));
+      runtime.lifecycle.introCount++;
+      const t = u.reducedMotion ? 0 : (u.introDuration ?? u.defaultIntroDuration);
+      const ease = u.isMobile ? "Power0.easeNone" : heroIntroEase;
       A.p8.killTweensOf(this._simulationPos.material.uniforms.u_show);
       A.p8.to(this._simulationPos.material.uniforms.u_show, {
         value: 1,
         duration: t,
-        ease: "Power0.easeNone",
+        ease,
         delay: e
       });
       A.p8.killTweensOf(this._simulationSpring.material.uniforms.u_show);
       A.p8.to(this._simulationSpring.material.uniforms.u_show, {
         value: 1,
         duration: t,
-        ease: "Power0.easeNone",
+        ease,
         delay: e
       });
       A.p8.killTweensOf(this._material.customUniforms[8]);
       A.p8.to(this._material.customUniforms[8], {
         value: 1,
         duration: t,
-        ease: "Power0.easeNone",
+        ease,
         delay: e
       });
       A.p8.killTweensOf(this._depthMaterial.customUniforms.u_show);
       A.p8.to(this._depthMaterial.customUniforms.u_show, {
         value: 1,
         duration: t,
-        ease: "Power0.easeNone",
+        ease,
         delay: e
       });
       A.p8.killTweensOf(this._params.baseRotation);
       A.p8.to(this._params.baseRotation, {
         y: 0,
         duration: t,
-        ease: "Power2.easeOut",
+        ease: u.isMobile ? "Power2.easeOut" : progress => 1 - Math.pow(1 - heroIntroEase(progress), 3),
         delay: e
       });
       this.active = true;
@@ -5173,10 +5319,19 @@ ${e.fragmentShader}`;
     }
   }
   setProgess(e) {}
-  _releaseStageDocument() {
-    if (this._stagePickLocked || this._stagePickTarget > 0) this._stagePickReturning = this._stagePickActiveUniform.value > 0.002;
-    this._stagePickLocked = false;
-    this._stagePickTarget = 0;
+  _resetScatterPointer() {
+    this._scatterPrev = null;
+    this._scatterMoved = false;
+  }
+  _clearStageScatter() {
+    this._resetScatterPointer();
+    if (!this._scatterDirty) return;
+    this._scatterValues.fill(0);
+    this._scatterTargets.fill(0);
+    this._scatterVelocities.fill(0);
+    this._scatterHitTimes.fill(0);
+    this._scatterAttribute.needsUpdate = true;
+    this._scatterDirty = false;
   }
   _updateStageProjection() {
     const camera = u.WebGL.particleCamera;
@@ -5204,62 +5359,104 @@ ${e.fragmentShader}`;
     if (distance < 0 || distance > 1) return null;
     return this._stageHit.copy(far).sub(near).multiplyScalar(distance).add(near);
   }
-  _pickStageDocument() {
+  _updateStageScatter() {
+    const now = performance.now();
+    const dt = Math.min(0.05, Math.max(0, (now - (this._scatterLastTime ?? now)) / 1000));
+    this._scatterLastTime = now;
     const progress = u.sectionProgress;
-    const ready = this._loaded && progress >= 0.98 && progress < 1.82 &&
-      !u.isMobile && !u.reducedMotion && !reducedMotionQuery.matches && this._stageHoverQuery.matches && this._pointerActiveTarget > 0.5 &&
-      this._material.customUniforms[14].value >= 0.98 && this._material.customUniforms[13].value < 0.04;
-    if (!ready) {
-      if (this._stagePickUniform.value >= 0) this._updateStageProjection();
-      this._releaseStageDocument();
-      return;
-    }
+    const enabled = !u.isMobile && !u.reducedMotion && !reducedMotionQuery.matches && !u.finaleTransition && this._finaleFrameSettled !== false && this._stageHoverQuery.matches && document.hasFocus();
+    const visaReady = this._timeline.visaAvailable >= 1 && this._finaleVisibilityUniform.value > 0.999
+      && this._visaRevealUniform.value > 0.999 && Math.abs(this._visaScaleUniform.value - 1) < 0.001
+      && Math.abs(this._visaOffsetUniform.value.y) < 0.001 && Math.abs(this._visaAngleUniform.value) < 0.001
+      && this._material.customUniforms[13].value < 0.04 && Math.abs(this._material.customUniforms[14].value - 3) < 0.01;
+    const weight = enabled && visaReady ? 1 : enabled ? documentScatterWeight(progress, {
+      formation: this._material.customUniforms[14].value,
+      explode: this._material.customUniforms[13].value,
+      stampDone: u.WebGL._stamp?._playback.state === "done"
+    }) : 0;
+    this._scatterUniform.value = weight;
+    const stage = weight > 0 ? (visaReady ? "visa" : progress < documentPhases.formScatterStart ? "form" : "stamp") : null;
+    // Direct jumps between pages must not carry over an old cursor
+    // segment or an unfinished spring, even if no cloud frame was rendered.
+    if (!stage || stage !== this._scatterStage) this._clearStageScatter();
+    this._scatterStage = stage;
+    if (!stage) return;
     this._updateStageProjection();
-    const hit = this._stagePointerTarget();
+    const usePocketMask = stage === "visa" && u.finaleMode === "folder";
+    if (usePocketMask) u.WebGL._folder.preparePageMask();
+    let sx = 0, sy = 0, ex = 0, ey = 0, segment = false;
+    const moved = this._scatterMoved && this._pointerActiveTarget > 0.5;
+    this._scatterMoved = false;
+    if (moved) {
+      const previous = this._scatterPrev;
+      this._scatterPrev = { x: this._mTg.x, y: this._mTg.y };
+      if (previous) {
+        const dx = (this._mTg.x - previous.x) * u.window.w * 0.5;
+        const dy = (this._mTg.y - previous.y) * u.window.h * 0.5;
+        if (Math.hypot(dx, dy) > 0.5) {
+          const start = this._stagePointerTarget(previous.x, previous.y);
+          const ax = start?.x, ay = start?.y;
+          const end = this._stagePointerTarget();
+          if (start && end) {
+            // Clip the swept cursor to the original page, even when both ends lie outside it.
+            const factor = this._material.customUniforms[3].value / 4.35;
+            const bx = end.x, by = end.y;
+            const vx = bx - ax, vy = by - ay;
+            let lo = 0, hi = 1;
+            for (const [origin, delta, half] of [[ax, vx, 2.125 * factor], [ay, vy, 3.005 * factor]]) {
+              if (Math.abs(delta) < 1e-8) {
+                if (Math.abs(origin) > half) { hi = -1; break; }
+              } else {
+                const t1 = (-half - origin) / delta, t2 = (half - origin) / delta;
+                lo = Math.max(lo, Math.min(t1, t2));
+                hi = Math.min(hi, Math.max(t1, t2));
+              }
+            }
+            if (lo <= hi) {
+              const z = 0.12 * factor;
+              const screen = this._scatterScreen;
+              screen.set(ax + vx * lo, ay + vy * lo, z).applyMatrix4(this._stageProjection);
+              sx = screen.x * u.window.w * 0.5; sy = screen.y * u.window.h * 0.5;
+              screen.set(ax + vx * hi, ay + vy * hi, z).applyMatrix4(this._stageProjection);
+              ex = screen.x * u.window.w * 0.5; ey = screen.y * u.window.h * 0.5;
+              segment = true;
+            }
+          }
+        }
+      }
+    }
     const factor = this._material.customUniforms[3].value / 4.35;
-    // SVG coordinates start at the top; the page-local Y axis points upwards.
-    const svgX = hit ? (hit.x / (4.25 * factor) + 0.5) * 840 : -1;
-    const svgY = hit ? (0.5 - hit.y / (6.01 * factor)) * 1188 : -1;
-    const region = assembledDocumentHoverRegions.find(item => svgX >= item.x && svgX <= item.x + item.width && svgY >= item.y && svgY <= item.y + item.height);
-    if (!region || (this._stageRegion && region !== this._stageRegion)) {
-      this._releaseStageDocument();
-      return;
+    const returnSeconds = Math.max(0.2, this._scatterTune.returnSeconds);
+    const cursorSegment = [sx, sy, ex, ey];
+    let dirty = false;
+    for (let index = 0; index < this._nb; index++) {
+      const offset = index * 4;
+      const x = ((index % this._grid + 0.5) / this._grid - 0.5) * 4.25 * factor;
+      const y = ((Math.floor(index / this._grid) + 0.5) / this._grid - 0.5) * 6.01 * factor;
+      if (segment) {
+        const screen = this._scatterScreen.set(x, y, 0.12 * factor).applyMatrix4(this._stageProjection);
+        const px = screen.x * u.window.w * 0.5, py = screen.y * u.window.h * 0.5;
+        const visible = !usePocketMask || u.WebGL._folder.pagePointVisible(screen.x, screen.y);
+        const impulse = visible ? cursorImpulse(index, px, py, cursorSegment, dt, this._scatterTune) : null;
+        if (impulse && (!usePocketMask || u.WebGL._folder.pagePointVisible(
+          impulse.hitX / (u.window.w * 0.5), impulse.hitY / (u.window.h * 0.5)))) {
+          const target = this._stagePointerTarget(impulse.x / (u.window.w * 0.5), impulse.y / (u.window.h * 0.5));
+          if (target) {
+            this._scatterTargets[offset] = target.x - x;
+            this._scatterTargets[offset + 1] = target.y - y;
+            this._scatterTargets[offset + 2] = 0.10 * factor * impulse.weight;
+            this._scatterTargets[offset + 3] = impulse.tilt;
+            this._scatterHitTimes[index] = now;
+          }
+        }
+      }
+      dirty = stepScatterCell(index, now, dt, returnSeconds, this._scatterValues,
+        this._scatterTargets, this._scatterVelocities, this._scatterHitTimes) || dirty;
     }
-    // Finish returning the previous block before picking the current cursor location.
-    if (this._stagePickReturning) return;
-    if (this._stagePickLocked) {
-      this._stagePickTarget = 1;
-      return;
+    if (dirty) {
+      this._scatterAttribute.needsUpdate = true;
+      this._scatterDirty = true;
     }
-    this._stageRegion = region;
-    const bounds = this._stageRegionUniform.value;
-    bounds.x = Math.floor(region.x / 840 * this._grid);
-    bounds.y = Math.floor((1 - (region.y + region.height) / 1188) * this._grid);
-    bounds.z = Math.ceil((region.x + region.width) / 840 * this._grid) - 1;
-    bounds.w = Math.ceil((1 - region.y / 1188) * this._grid) - 1;
-    const centerX = ((bounds.x + bounds.z + 1) / (2 * this._grid) - 0.5) * 4.25 * factor;
-    const centerY = ((bounds.y + bounds.w + 1) / (2 * this._grid) - 0.5) * 6.01 * factor;
-    this._stageAnchorUniform.value.set(centerX, centerY);
-    this._stagePickUniform.value = assembledDocumentHoverRegions.indexOf(region);
-    this._stageFollowPos.x = centerX;
-    this._stageFollowPos.y = centerY;
-    this._stageFollowUniform.value.set(centerX, centerY);
-    this._stageFollowVel.x = 0;
-    this._stageFollowVel.y = 0;
-    this._stagePickLocked = true;
-    this._stagePickTarget = 1;
-  }
-  _stageClampFollow(x, y) {
-    const anchor = this._stageAnchorUniform.value;
-    const pageZ = 0.12 * this._material.customUniforms[3].value / 4.35;
-    const screenAnchor = this._stageScreenAnchor.set(anchor.x, anchor.y, pageZ).applyMatrix4(this._stageProjection);
-    const screenFollow = this._stageScreenFollow.set(x, y, pageZ).applyMatrix4(this._stageProjection);
-    const dx = (screenFollow.x - screenAnchor.x) * u.window.w * 0.5;
-    const dy = (screenFollow.y - screenAnchor.y) * u.window.h * 0.5;
-    const distance = Math.hypot(dx, dy);
-    const limit = Math.max(0, this._stageMaxOffsetUniform.value);
-    const weight = distance > limit ? limit / distance : 1;
-    return this._stagePointerTarget(screenAnchor.x + (screenFollow.x - screenAnchor.x) * weight, screenAnchor.y + (screenFollow.y - screenAnchor.y) * weight);
   }
   onMousedown(e) {
     this._mTg = e;
@@ -5267,8 +5464,6 @@ ${e.fragmentShader}`;
     this._mPr.y = this._mTg.y;
     this._mDelta.x = 0;
     this._mDelta.y = 0;
-    this._stageTouchHeld = u.isMobile;
-    this._pickStageDocument();
   }
   onMousemove(e) {
     this._mTg = e;
@@ -5282,21 +5477,20 @@ ${e.fragmentShader}`;
     }
     this._mPr.x = this._mTg.x;
     this._mPr.y = this._mTg.y;
-    this._pickStageDocument();
+    this._scatterMoved = true;
   }
   onMouseup() {
-    this._stageTouchHeld = false;
     if (u.isMobile) {
       this._pointerActiveTarget = 0;
-      this._releaseStageDocument();
+      this._resetScatterPointer();
     }
   }
   onMouseleave() {
     this._mDelta.x = 0;
     this._mDelta.y = 0;
     this._pointerActiveTarget = 0;
-    this._stageTouchHeld = false;
-    this._releaseStageDocument();
+    this._resetScatterPointer();
+    this._resetHeroPointer();
   }
   onAssetsLoaded({
     renderTarget: e
@@ -5311,6 +5505,8 @@ ${e.fragmentShader}`;
   resize({
     camera: e
   } = {}) {
+    this._resetScatterPointer();
+    this._resetHeroPointer();
     if (this._material) {
       this._pSize = Nt(e, 10);
       this._pSize2 = Nt(e, 6.5);
@@ -5334,15 +5530,40 @@ ${e.fragmentShader}`;
       this._depthMaterial.customUniforms.u_motion.value += (t - this._depthMaterial.customUniforms.u_motion.value) * this._easing;
       this._material.customUniforms[18].value = this._fluid ? this._fluid.density.read.texture : null;
       this._depthMaterial.customUniforms.t_fluid.value = this._fluid ? this._fluid.density.read.texture : null;
+      if (u.finaleTransition) {
+        const transition = u.finaleTransition;
+        const elapsed = (performance.now() - transition.start) / 200;
+        const blend = paperSmooth(elapsed, 0, 1);
+        u.finaleModeMix = transition.from + (transition.to - transition.from) * blend;
+        if (elapsed >= 1 || u.reducedMotion) {
+          u.finaleModeMix = transition.to;
+          u.finaleTransition = null;
+          if (u.reducedMotion) this._snapFinaleMode = true;
+        }
+      }
+      this._frameEasing = this._snapFinaleMode ? 1 : this._easing;
+      this._timeline = documentTimeline(u.sectionProgress, { mobile: u.isMobile, reducedMotion: u.reducedMotion,
+        variant: u.folderVariant, finaleMode: u.finaleMode, finaleMix: u.finaleModeMix });
+      // Remove last frame's idle transform before easing the scroll-driven base.
+      // Otherwise the oscillation would accumulate or linger in later scenes.
+      this._material.customUniforms[12].value.sub(this._idleOffset);
+      this._material.customUniforms[15].value.sub(this._idleRotation);
+      this._updateFormation();
       this._updateRotation();
       if (u.isMobile) {
         this._updateMobilePosition();
       } else {
         this._updatePosition();
       }
+      this._depthMaterial.customUniforms.u_factor.value = this._material.customUniforms[3].value;
+      this._finaleFrameSettled = u.sectionProgress < 5.5 || (
+        Math.abs(this._material.customUniforms[3].value - this._targetFactor) < 0.01
+        && this._material.customUniforms[12].value.distanceTo(this._params.basePosition) < 0.01);
+      this._applyFormIdle(e);
       this._updateMouse();
       this._updateVisaReveal();
       this._updateFBO();
+      this._snapFinaleMode = false;
     }
   }
   _updateFBO() {
@@ -5379,69 +5600,210 @@ ${e.fragmentShader}`;
       this._hasRendered = true;
     }
   }
+  _updateFormation() {
+    const { formation, explode } = this._timeline;
+    for (const uniforms of [this._simulationPos.material.uniforms, this._simulationSpring.material.uniforms]) {
+      uniforms.u_progress.value += (formation - uniforms.u_progress.value) * this._easing;
+      uniforms.u_explode.value += (explode - uniforms.u_explode.value) * this._easing;
+    }
+    this._material.customUniforms[14].value += (formation - this._material.customUniforms[14].value) * this._easing;
+    this._material.customUniforms[13].value += (explode - this._material.customUniforms[13].value) * this._easing;
+    this._depthMaterial.customUniforms.u_progress.value = this._material.customUniforms[14].value;
+    this._depthMaterial.customUniforms.u_explode.value = this._material.customUniforms[13].value;
+  }
+  _applyFormIdle(time) {
+    const progress = u.sectionProgress;
+    const enter = zt((progress - 0.95) / 0.1, 0, 1);
+    const exit = zt((1.8 - progress) / 0.1, 0, 1);
+    const weight = u.reducedMotion || reducedMotionQuery.matches ? 0
+      : Math.max(enter * enter * (3 - 2 * enter) * exit * exit * (3 - 2 * exit),
+        this._timeline.visaIdleWeight)
+        * zt(this._idleTune.strength, 0, 2) * (u.isMobile ? 0.5 : 1);
+    this._idleOffset.set(0, 0, 0);
+    this._idleRotation.set(0, 0, 0);
+    if (weight > 0) {
+      // Offset lives in view space. Convert CSS pixels at the page's current
+      // center depth, independent of DPR, viewport size and camera framing.
+      this._updateStageProjection();
+      const pageZ = 0.12 * this._material.customUniforms[3].value / 4.35;
+      const depth = Math.max(0.001, -this._stageHit.set(0, 0, pageZ).applyMatrix4(this._stageView).z);
+      const projection = u.WebGL.particleCamera.projectionMatrix.elements;
+      const pose = idlePose(time, weight);
+      this._idleOffset.set(
+        pose.x * (2 * depth / (projection[0] * u.window.w)),
+        pose.y * (2 * depth / (projection[5] * u.window.h)), 0
+      );
+      this._idleRotation.set(pose.rx, pose.ry, pose.rz);
+    }
+    const offset = this._material.customUniforms[12].value;
+    const rotation = this._material.customUniforms[15].value;
+    offset.add(this._idleOffset);
+    rotation.add(this._idleRotation);
+    // Picking reads these same final transforms; depth must match color exactly.
+    this._depthMaterial.customUniforms.u_offset.value.copy(offset);
+    this._depthMaterial.customUniforms.u_rotation.value.copy(rotation);
+  }
   _updateRotation() {
-    const e = u.sectionProgress;
-    const t = zt(Ut(e, 0.12, 1, 0, -0.32), -0.32, 0) + zt(Ut(e, 2.7, 3, 0, 0.32), 0, 0.32) - zt(Ut(e, 4.5, 5, 0, Math.PI), 0, Math.PI) + zt(Ut(e, 5.7, this.royYEnd, 0, Math.PI), 0, Math.PI);
-    const n = zt(Ut(e, 0.12, 1, 0, -0.07), -0.07, 0) + zt(Ut(e, 2.7, 3, 0, 0.07), 0, 0.07);
-    // x rotation: slight lean while assembled, then flat and fully frontal through the stamp state (no tilt) and while it flies apart
-    const i = zt(Ut(e, 0.12, 1, 0, 0.09), 0, 0.09) - zt(Ut(e, 2.7, 3, 0, 0.09), 0, 0.09);
-    this._material.customUniforms[15].value.x += (i - this._material.customUniforms[15].value.x) * (this._easing * 0.75);
-    this._material.customUniforms[15].value.y += (t - this._material.customUniforms[15].value.y) * (this._easing * 0.75);
-    this._material.customUniforms[15].value.z += (n - this._material.customUniforms[15].value.z) * (this._easing * 0.75);
-    this._depthMaterial.customUniforms.u_rotation.value.x += (i - this._depthMaterial.customUniforms.u_rotation.value.x) * (this._easing * 0.75);
-    this._depthMaterial.customUniforms.u_rotation.value.y += (t - this._depthMaterial.customUniforms.u_rotation.value.y) * (this._easing * 0.75);
-    this._depthMaterial.customUniforms.u_rotation.value.z += (n - this._depthMaterial.customUniforms.u_rotation.value.z) * (this._easing * 0.75);
+    const tilt = u.reducedMotion ? 0 : this._timeline.tilt;
+    const rotation = this._material.customUniforms[15].value;
+    rotation.x += (0.09 * tilt - rotation.x) * (this._easing * 0.75);
+    rotation.y += (-0.32 * tilt - rotation.y) * (this._easing * 0.75);
+    rotation.z += (-0.07 * tilt - rotation.z) * (this._easing * 0.75);
     this.rotation.y = this._params.baseRotation.y;
   }
-  _updateMouse() {
-    // Recheck every frame: scrolling can move the page beneath a stationary pointer.
-    this._pickStageDocument();
-    const e = u.reducedMotion || u.isMobile ? 0 : this._pointerActiveTarget;
-    this._pointerActiveUniform.value += (e - this._pointerActiveUniform.value) * (this._easing * 1.6);
-    const t = this._stagePickTarget;
-    const now = performance.now();
-    const elapsed = this._stageLastTime === null ? 1 : zt((now - this._stageLastTime) * 0.06, 0, 6);
-    this._stageLastTime = now;
-    const steps = Math.max(1, Math.ceil(elapsed));
-    const dt = elapsed / steps;
-    const T = this._stageTune;
-    const anchor = this._stageAnchorUniform.value;
-    let targetX = anchor.x;
-    let targetY = anchor.y;
-    this._stageMaxOffsetUniform.value = T.maxOffset;
-    if (t > 0) {
-      const pointer = this._stagePointerTarget();
-      const target = pointer && this._stageClampFollow(pointer.x, pointer.y);
-      if (target) { targetX = target.x; targetY = target.y; }
-    }
-    // Substeps keep the spring's timing consistent on 60/120 Hz screens and slower frames.
-    for (let step = 0; step < steps; step++) {
-      this._stagePickVelocity += (t - this._stagePickActiveUniform.value) * (t > 0 ? T.growGain : T.returnGain) * dt;
-      this._stagePickVelocity *= Math.pow(t > 0 ? T.growFriction : T.returnFriction, dt);
-      this._stagePickActiveUniform.value = zt(this._stagePickActiveUniform.value + this._stagePickVelocity * dt, 0, 1);
-      if (t > 0 && this._stagePickActiveUniform.value >= 1) this._stagePickVelocity = 0;
-      if (this._stagePickUniform.value >= 0) {
-        const fp = this._stageFollowPos;
-        const fv = this._stageFollowVel;
-        fv.x = (fv.x + (targetX - fp.x) * T.followStiffness * dt) * Math.pow(T.followDamping, dt);
-        fv.y = (fv.y + (targetY - fp.y) * T.followStiffness * dt) * Math.pow(T.followDamping, dt);
-        // Clamp the spring too, so overshoot cannot exceed the tether's CSS-pixel limit.
-        const clamped = this._stageClampFollow(fp.x + fv.x * dt, fp.y + fv.y * dt);
-        if (clamped) {
-          fp.x = clamped.x;
-          fp.y = clamped.y;
-          this._stageFollowUniform.value.set(fp.x, fp.y);
-        }
+  _resetHeroPointer() {
+    this._heroPointerState = {};
+    this._heroMotion?.resetInput();
+    this._heroLastFrame = null;
+    this._heroMagnetUniform.value = 0;
+  }
+  _initHeroMotion() {
+    const front=u.WebGL._frontCones;
+    if (!front._loaded) return;
+    // Picking cache only. The renderer keeps sampling its live GPU simulation.
+    const target = this._fboPos.write;
+    const pixels=target.texture.type===Le.VzW ? new Float32Array(200*200*4) : new Uint16Array(200*200*4);
+    u.WebGL.renderer.readRenderTargetPixels(target,0,0,200,200,pixels);
+    const decode=v=>{
+      if(pixels instanceof Float32Array)return v;
+      const sign=v&32768?-1:1,exp=(v>>10)&31,m=v&1023;
+      return sign*(exp===0?Math.pow(2,-14)*m/1024:Math.pow(2,exp-15)*(1+m/1024));
+    };
+    const image=this._material.customUniforms[1].value.image;
+    const canvas=document.createElement("canvas");canvas.width=image.width;canvas.height=image.height;
+    const ctx=canvas.getContext("2d");ctx.drawImage(image,0,0);
+    const scales=ctx.getImageData(0,0,image.width,image.height).data;
+    const papers=[];
+    for(const layer of [this,front]) {
+      const g=layer._geometry;
+      for(let j=0;j<layer._nb;j++) {
+        const core=layer===this;
+        const id=core?g.attributes.a_index.array[j]:10000+j;
+        const h=id%100, row=Math.floor(id/100);
+        const at=((row*2+1)*200+h*2+1)*4;
+        const matrix=layer._mesh.instanceMatrix.array;
+        const seed=core?g.attributes.a_random.array:g.attributes.a_param.array;
+        const angle=g.attributes.a_angle.array;
+        papers.push({id,layer,j,core,base:core?[decode(pixels[at]),decode(pixels[at+1]),decode(pixels[at+2])]:[matrix[j*16+12],matrix[j*16+13],matrix[j*16+14]],
+          random:Array.from(seed.slice(j*4,j*4+4)),angle:Array.from(angle.slice(j*4,j*4+4)),
+          scale:core?scales[(row*image.width+h)*4]/255*this._scale*.1:matrix[j*16],
+          keep:!core||!sharpDocuments||heroHash(id*12.9898+.37)>=1-heroDensityUniform.value});
       }
     }
-    if (t === 0 && this._stagePickActiveUniform.value < 0.002 && Math.abs(this._stagePickVelocity) < 0.002) {
-      this._stagePickActiveUniform.value = 0;
-      this._stagePickVelocity = 0;
-      this._stagePickReturning = false;
-      this._stagePickUniform.value = -1;
-      this._stageRegion = null;
+    this._heroMotion=new HeroMotion(papers);
+    this._heroInteractionUniforms=heroInteractionUniforms;
+    runtime.lifecycle.captures++;
+    runtime.lifecycle.heroReady=true;
+  }
+  _updateHeroInteraction() {
+    const now=performance.now()/1000;
+    const progress=Math.max(u.sectionProgress,this._material.customUniforms[14].value);
+    const weight=1-paperSmooth(progress,.1,.46);
+    const enabled=weight>0 && this._material.customUniforms[8].value>=.999
+      && !u.isMobile && !u.reducedMotion && !reducedMotionQuery.matches && this._stageHoverQuery.matches && !document.hidden;
+    if(!enabled) {
+      this._resetHeroPointer();
+      if(weight<=0 || u.isMobile || u.reducedMotion || reducedMotionQuery.matches || !this._stageHoverQuery.matches) {
+        this._heroMotion=null;
+        heroInteractionUniforms.u_heroInteractionWeight.value=0;
+        runtime.lifecycle.heroReady=false;
+      }
+      return;
     }
-    if (this._stageOverlayMesh) this._stageOverlayMesh.visible = this._stagePickUniform.value >= 0;
+    if(!this._heroMotion && progress>.015){this._resetHeroPointer();return;}
+    if(!this._heroMotion)this._initHeroMotion();
+    if(!this._heroMotion)return;
+    const dt=Math.min(.05,Math.max(0,now-(this._heroLastFrame??now)));this._heroLastFrame=now;
+    const point=window.__DALA_HERO_POINTER__;
+    const input=consumeHeroPointer(this._heroPointerState,point,true);
+    const pointer=input.active?point:null;
+    if(input.seed)this._heroMotion.resetInput();
+    const camera=u.WebGL.particleCamera;
+    this._updateStageProjection();
+    const time=this._material.customUniforms[4].value;
+    const projection=camera.projectionMatrix.elements;
+    const work=this._stageHit;
+    const viewQ=new Rt._().setFromRotationMatrix(this._stageView);
+    const viewQuaternion=[viewQ.x,viewQ.y,viewQ.z,viewQ.w];
+    for(const p of this._heroMotion.papers) {
+      const r=p.random, a=p.angle, base=p.base;
+      let x=base[0],y=base[1],z=base[2],rx=0,ry=0,rz=0;
+      if(p.core) {
+        const motion=zt(this._material.customUniforms[24].value,0,1)*(1-paperSmooth(progress,.08,.88));
+        const tilt=(1-paperSmooth(progress,.08,.6))*heroTiltUniform.value;
+        const phase=time*(.55+r[1]*.8)+r[0]*9.3;
+        x+=(Math.sin(phase)+Math.cos(phase*.43+r[2]*5.1)*.55)*.24*motion;
+        y+=(Math.cos(phase*.79)+Math.sin(phase*.37)*.45)*.19*motion;
+        z+=Math.sin(phase*.61+r[2]*8.7)*.38*motion;
+        const [hA,hB,hC,hD]=a;
+        z+=(hD-.5)*2.4*tilt;
+        rx=((hA-.5)*2+Math.sin(time*(.25+hC*.3)+hD*6.2831)*.12)*tilt;
+        ry=(hB-.5)*2.2*tilt;rz=(hC-.5)*1.2*tilt;
+        const flutter=(Math.sin(time*(.78+r[1]*.9)+r[0]*10.7)*.48+Math.cos(time*.51+r[2]*8.3)*.2)*motion;
+        const flutterQ=heroAxis(sharpDocuments?[0,0,1]:[r[0],.7,r[2]],-flutter*(sharpDocuments?.28:1));
+        p.quaternion=heroMultiply(viewQuaternion,heroMultiply(flutterQ,heroMultiply(heroQuaternion(-rx,0,0),heroMultiply(heroQuaternion(0,-ry,0),heroQuaternion(0,0,-rz)))));
+        work.set(x,y,z).applyMatrix4(this._stageView);
+      } else {
+        const resolution=p.layer._material.customUniforms[2].value;
+        const factor=.5+(base[2]/9)*(-.3);
+        const motion=zt(p.layer._material.customUniforms[4].value,0,1);
+        const rate=.5+.85*motion,drift=(.15+.37*motion)*motion;
+        x=x*resolution.x*factor+Math.sin(time*r[3]*.5)*r[1]*.15+Math.sin(time*rate+a[3]*11.3)*r[1]*drift;
+        y=y*resolution.y*factor+Math.cos(time*r[3]*.5)*r[2]*.15+Math.cos(time*rate*.83+a[2]*9.1)*r[2]*drift;
+        z+=Math.sin(time*rate*.61+a[0]*7.7)*.42*motion;
+        const calm=Math.sin(time*(.2+r[3]*.25)+a[3]*6.2831)*.12;
+        const lively=Math.sin(time*(.72+r[3]*.8)+a[3]*9.7)*.34+Math.cos(time*.43+a[1]*8.1)*.16;
+        const angle=(calm+(lively-calm)*motion)*(sharpDocuments?.32:1);
+        p.layer._mesh.updateWorldMatrix(true,false);
+        const matrix=new It.y().multiplyMatrices(camera.matrixWorldInverse,p.layer._mesh.matrixWorld);
+        const q=new Rt._().setFromRotationMatrix(matrix);
+        p.quaternion=heroMultiply([q.x,q.y,q.z,q.w],heroAxis(sharpDocuments?[0,0,1]:[a[0]*.8*motion,a[1]*.8*motion,1],-angle));
+        p.layer._mesh.updateWorldMatrix(true,false);
+        work.set(x,y,z).applyMatrix4(p.layer._mesh.matrixWorld).applyMatrix4(camera.matrixWorldInverse);
+      }
+      p.view=[work.x,work.y,work.z];p.depth=work.z;
+      p.unitX=-2*work.z/(projection[0]*u.window.w);p.unitY=-2*work.z/(projection[5]*u.window.h);
+      p.bx=(work.x/(-work.z)*projection[0]+1)*u.window.w/2;
+      p.by=(1-work.y/(-work.z)*projection[5])*u.window.h/2;
+      p.keep=!p.core||!sharpDocuments||p.layer._geometry.attributes.a_heroRank.array[p.j]>=1-heroDensityUniform.value;
+      p.size=p.scale*(p.core?this._material.customUniforms[5].value/this._scale:p.layer._material.customUniforms[1].value)*(p.core&&sharpDocuments?1.7:1);
+      p.hw=Math.max(2,p.size*.36/p.unitX);p.hh=Math.max(2,p.size*.5/p.unitY);
+      p.visible=p.keep&&work.z<-.1&&p.bx+p.ox>-80&&p.bx+p.ox<u.window.w+80&&p.by+p.oy>-80&&p.by+p.oy<u.window.h+80;
+      p.rotation=[rx,ry,rz];
+    }
+    this._heroMotion.step(now,dt,pointer,u.window,progress<=.1);
+    for(const p of this._heroMotion.papers) {
+      const attribute=p.layer._geometry.attributes.a_heroInteraction;
+      const k=p.j*4;
+      attribute.array[k]=p.ox; attribute.array[k+1]=p.oy;
+      attribute.array[k+2]=p.spin; attribute.array[k+3]=p.held;
+      // Project the native sheet's face for picking; never feed these poses to rendering.
+      const depth=p.view[2]+p.held*.3;
+      const centerX=(p.x/u.window.w*2-1)*(-depth)/projection[0];
+      const centerY=(1-p.y/u.window.h*2)*(-depth)/projection[5];
+      const size=p.size*(1+(heroInteractionUniforms.u_heroMagnetScale.value-1)*p.held);
+      const q=p.quaternion || heroQuaternion(p.rotation[0],p.rotation[1],p.rotation[2]);
+      p.corners=[[-.36,-.5],[.36,-.5],[.36,.5],[-.36,.5]].map(([x,y])=>{
+        x*=size;y*=size;
+        const tx=-q[2]*y,ty=q[2]*x,tz=q[0]*y-q[1]*x;
+        let rx=x+2*(q[3]*tx+q[1]*tz-q[2]*ty),ry=y+2*(q[3]*ty+q[2]*tx-q[0]*tz);
+        const rz=2*(q[3]*tz+q[0]*ty-q[1]*tx);
+        const c=Math.cos(p.spin),sn=Math.sin(p.spin),sx=rx*c-ry*sn;
+        ry=rx*sn+ry*c;rx=sx;
+        return [((centerX+rx)/(-depth-rz)*projection[0]+1)*u.window.w/2-p.x,
+          (1-(centerY+ry)/(-depth-rz)*projection[5])*u.window.h/2-p.y];
+      });
+    }
+    for(const layer of [this,u.WebGL._frontCones])layer._geometry.attributes.a_heroInteraction.needsUpdate=true;
+    heroInteractionUniforms.u_heroInteractionWeight.value=weight;
+    heroInteractionUniforms.u_heroScreen.value.set(u.window.w,u.window.h);
+    this._heroMagnetUniform.value=this._heroMotion.selected?1:0;
+  }
+  _updateMouse() {
+    this._updateHeroInteraction();
+    this._updateStageScatter();
+    const e = u.reducedMotion || u.isMobile ? 0 : this._pointerActiveTarget;
+    this._pointerActiveUniform.value += (e - this._pointerActiveUniform.value) * (this._easing * 1.6);
     this._mDelta.x += (0 - this._mDelta.x) * this._easing;
     this._mDelta.y += (0 - this._mDelta.y) * this._easing;
     this._material.customUniforms[10].value.x += (this._mTg.x - this._material.customUniforms[10].value.x) * (this._easing * 0.75);
@@ -5454,46 +5816,40 @@ ${e.fragmentShader}`;
     this._depthMaterial.customUniforms.u_delta.value.y += (this._mDelta.y - this._depthMaterial.customUniforms.u_delta.value.y) * (this._easing * 0.75);
   }
   _updateVisaReveal() {
-    const e = u.sectionProgress;
-    let t = u.isMobile ? 5.72 : 5.86;
-    if (!u.isMobile && u.folderVariant === "a") t = 5.9;
-    if (!u.isMobile && u.folderVariant === "b") t = 5.84;
-    const n = u.isMobile ? 5.8 : 6;
-    const i = zt(Ut(e, t, n, 0, 1), 0, 1);
-    this._visaRevealUniform.value += (i - this._visaRevealUniform.value) * this._easing;
+    const { visaReveal, visaApplication, finaleLayout, documentVisibility, finale } = this._timeline;
+    const pose = visaStickerPose(visaApplication, u.reducedMotion || reducedMotionQuery.matches);
+    const mix = u.finaleModeMix;
+    this._visaOffsetUniform.value.set(0, pose.offsetY * mix);
+    this._visaScaleUniform.value = 1 + (pose.scale - 1) * mix;
+    this._visaAngleUniform.value = pose.angle * mix;
+    this._visaShadowUniform.value = pose.shadow * mix;
+    this._finaleLayoutUniform.value = finaleLayout;
+    // Standalone pose and alpha follow the same scroll sample without a second clock.
+    if (mix > 0) this._visaRevealUniform.value = visaReveal;
+    else this._visaRevealUniform.value += (visaReveal - this._visaRevealUniform.value) * this._frameEasing;
+    this._finalePaperUniform.value += (finale - this._finalePaperUniform.value) * this._frameEasing;
+    this._finaleVisibilityUniform.value += (documentVisibility - this._finaleVisibilityUniform.value) * this._frameEasing;
+    // Hide color and depth together while the closed folder enters.
+    this._mesh.visible = this._finaleVisibilityUniform.value > 0.001;
   }
   _updatePosition() {
     const e = u.sectionProgress;
-    // The final composition moves left to reserve the right half of the footer for copy.
-    // Stamped document sits on the LEFT (x = -3.2, mirror of the form on the right); by 5.0 it is back at -0.5 as before.
-    const t = zt(Ut(e, 0, 1, 0, 3.4), 0, 3.4) - zt(Ut(e, 2.7, 3, 0, 6.6), 0, 6.6) + zt(Ut(e, 4.5, 5, 0, 2.7), 0, 2.7) - zt(Ut(e, 5.7, 6, 0, 1.3), 0, 1.3);
+    // Each cloud returns to the center before resolving into the next form.
+    // The final composition reserves the right half of the footer for copy.
+    const t = this._timeline.x;
     this._params.basePosition.x = t + this._material.customUniforms[10].value.x * 0;
-    const n = zt(Ut(e, 5.7, 6, 0, 0.6), 0, 0.6);
+    const n = zt(Ut(e, 5.7, 6, 0, 0.6), 0, 0.6) * (1 - this._timeline.standaloneFrame);
     this._params.basePosition.y = n + this._material.customUniforms[10].value.y * 0;
-    let i = zt(Ut(e, 1.8, 2.2, 0, 1), 0, 1) - zt(Ut(e, 2.7, 3, 0, 1), 0, 1) + zt(Ut(e, 4.5, 5, 0, 1), 0, 1) - zt(Ut(e, 5.7, 6, 0, 1), 0, 1);
-    if (u.folderVariant === "b" && e >= 5.78 && e <= 5.94) {
-      const t = zt(Ut(e, 5.78, 5.94, 0, 1), 0, 1);
-      i = Math.max(i, Math.sin(t * Math.PI) * 0.86);
-    }
-    if (u.reducedMotion) i *= 0.12;
-    this._material.customUniforms[13].value += (i - this._material.customUniforms[13].value) * this._easing;
-    this._simulationPos.material.uniforms.u_explode.value += (i - this._simulationPos.material.uniforms.u_explode.value) * this._easing;
-    this._simulationSpring.material.uniforms.u_explode.value += (i - this._simulationSpring.material.uniforms.u_explode.value) * this._easing;
-    const r = this._factor + zt(Ut(e, 0, 1, 0, 0.55), 0, 0.55) - zt(Ut(e, 2.7, 3, 0, 0.55), 0, 0.55) + zt(Ut(e, 3.3, 3.5, 0, 0.3), 0, 0.3) - zt(Ut(e, 5.7, 6, 0, 1), 0, 1);
-    this._material.customUniforms[3].value += (r - this._material.customUniforms[3].value) * this._easing;
-    this._simulationPos.material.uniforms.u_factor.value += (r - this._simulationPos.material.uniforms.u_factor.value) * this._easing;
-    this._simulationSpring.material.uniforms.u_factor.value += (r - this._simulationPos.material.uniforms.u_factor.value) * this._easing;
-    const o = zt(Ut(e, 0, 1, 0, 1), 0, 1) + zt(Ut(e, 2.7, 3, 0, 1), 0, 1) + zt(Ut(e, 3.3, 3.5, 0, 1), 0, 1);
-    this._material.customUniforms[14].value += (o - this._material.customUniforms[14].value) * this._easing;
-    this._simulationPos.material.uniforms.u_progress.value += (o - this._simulationPos.material.uniforms.u_progress.value) * this._easing;
-    this._simulationSpring.material.uniforms.u_progress.value += (o - this._simulationSpring.material.uniforms.u_progress.value) * this._easing;
-    const s = zt(Ut(e, 0, 1, 0, 1), 0, 1) - zt(Ut(e, 2.7, 3, 0, 1), 0, 1) + zt(Ut(e, 3, 3.5, 0, 1), 0, 1) - zt(Ut(e, 5.5, 5.5, 0, 1), 0, 1);
-    this._material.customUniforms[20].value += (s - this._material.customUniforms[20].value) * this._easing;
-    this._depthMaterial.customUniforms.u_progress2.value += (s - this._depthMaterial.customUniforms.u_progress2.value) * this._easing;
-    this._material.customUniforms[12].value.x += (this._params.basePosition.x - this._material.customUniforms[12].value.x) * this._easing;
-    this._material.customUniforms[12].value.y += (this._params.basePosition.y - this._material.customUniforms[12].value.y) * this._easing;
-    this._depthMaterial.customUniforms.u_offset.value.x += (this._params.basePosition.x - this._depthMaterial.customUniforms.u_offset.value.x) * this._easing;
-    this._depthMaterial.customUniforms.u_offset.value.y += (this._params.basePosition.y - this._depthMaterial.customUniforms.u_offset.value.y) * this._easing;
+    const r = this._factor + this._timeline.tilt * 0.55 + this._timeline.stamp * 0.3 - zt(Ut(e, 5.7, 6, 0, 1), 0, 1) + this._timeline.standaloneFrame;
+    this._targetFactor = r;
+    this._material.customUniforms[3].value += (r - this._material.customUniforms[3].value) * this._frameEasing;
+    this._simulationPos.material.uniforms.u_factor.value += (r - this._simulationPos.material.uniforms.u_factor.value) * this._frameEasing;
+    this._simulationSpring.material.uniforms.u_factor.value += (r - this._simulationPos.material.uniforms.u_factor.value) * this._frameEasing;
+    const s = this._timeline.tilt + this._timeline.stamp * (1 - this._timeline.finale);
+    this._material.customUniforms[20].value += (s - this._material.customUniforms[20].value) * this._frameEasing;
+    this._depthMaterial.customUniforms.u_progress2.value += (s - this._depthMaterial.customUniforms.u_progress2.value) * this._frameEasing;
+    this._material.customUniforms[12].value.x += (this._params.basePosition.x - this._material.customUniforms[12].value.x) * this._frameEasing;
+    this._material.customUniforms[12].value.y += (this._params.basePosition.y - this._material.customUniforms[12].value.y) * this._frameEasing;
   }
   _updateMobilePosition() {
     const e = u.sectionProgress;
@@ -5502,23 +5858,29 @@ ${e.fragmentShader}`;
     // The footer bar leaves a shallower stage on phones. Lift and scale down
     // the shared finale so the full VISA word stays above that bar.
     this._params.basePosition.y = 1.2 + zt(Ut(e, 5.7, 5.8, 0, 0.5), 0, 0.5);
-    let n = zt(Ut(e, 1.8, 2.2, 0, 1), 0, 1) - zt(Ut(e, 2.7, 3, 0, 1), 0, 1) + zt(Ut(e, 4.5, 5, 0, 1), 0, 1) - zt(Ut(e, 5.7, 5.8, 0, 1), 0, 1);
-    if (u.reducedMotion) n *= 0.12;
-    this._material.customUniforms[13].value += (n - this._material.customUniforms[13].value) * this._easing;
-    this._simulationPos.material.uniforms.u_explode.value += (n - this._simulationPos.material.uniforms.u_explode.value) * this._easing;
-    this._simulationSpring.material.uniforms.u_explode.value += (n - this._simulationSpring.material.uniforms.u_explode.value) * this._easing;
-    const i = zt(Ut(e, 0, 1, 0, 1), 0, 1) + zt(Ut(e, 2.7, 3, 0, 1), 0, 1) + zt(Ut(e, 3.3, 3.5, 0, 1), 0, 1);
-    this._material.customUniforms[14].value += (i - this._material.customUniforms[14].value) * this._easing;
-    this._simulationPos.material.uniforms.u_progress.value += (i - this._simulationPos.material.uniforms.u_progress.value) * this._easing;
-    this._simulationSpring.material.uniforms.u_progress.value += (i - this._simulationSpring.material.uniforms.u_progress.value) * this._easing;
-    const r = this._factor - zt(Ut(e, 5.7, 5.8, 0, 1.2), 0, 1.2);
-    this._material.customUniforms[3].value += (r - this._material.customUniforms[3].value) * this._easing;
-    this._simulationPos.material.uniforms.u_factor.value += (r - this._simulationPos.material.uniforms.u_factor.value) * this._easing;
-    this._simulationSpring.material.uniforms.u_factor.value += (r - this._simulationSpring.material.uniforms.u_factor.value) * this._easing;
-    this._material.customUniforms[12].value.x += (this._params.basePosition.x - this._material.customUniforms[12].value.x) * this._easing;
-    this._material.customUniforms[12].value.y += (this._params.basePosition.y - this._material.customUniforms[12].value.y) * this._easing;
-    this._depthMaterial.customUniforms.u_offset.value.x += (this._params.basePosition.x - this._depthMaterial.customUniforms.u_offset.value.x) * this._easing;
-    this._depthMaterial.customUniforms.u_offset.value.y += (this._params.basePosition.y - this._depthMaterial.customUniforms.u_offset.value.y) * this._easing;
+    let r = this._factor - zt(Ut(e, 5.7, 5.8, 0, 1.2), 0, 1.2);
+    const standalone = this._timeline.standaloneFrame;
+    if (standalone > 0) {
+      const projection = u.WebGL.particleCamera.projectionMatrix.elements;
+      const viewWidth = 20 / projection[0], viewHeight = 20 / projection[5];
+      const bar = document.querySelector(".footer__bar")?.getBoundingClientRect();
+      const bottom = bar && bar.top > 48 && bar.top < u.window.h && bar.bottom > 0 ? bar.top - 24 : u.window.h - 24;
+      const availableHeight = Math.max(32, bottom - 24);
+      const fit = Math.min(this._factor, (u.window.w - 48) / u.window.w * viewWidth * 4.35 / 4.25,
+        availableHeight / u.window.h * viewHeight * 4.35 / 6.01);
+      const halfHeight = 6.01 * fit / 4.35 / 2;
+      const minY = (0.5 - bottom / u.window.h) * viewHeight + halfHeight;
+      const maxY = (0.5 - 24 / u.window.h) * viewHeight - halfHeight;
+      const y = Math.max(minY, Math.min(maxY, 1.2));
+      r += (fit - r) * standalone;
+      this._params.basePosition.y += (y - this._params.basePosition.y) * standalone;
+    }
+    this._targetFactor = r;
+    this._material.customUniforms[3].value += (r - this._material.customUniforms[3].value) * this._frameEasing;
+    this._simulationPos.material.uniforms.u_factor.value += (r - this._simulationPos.material.uniforms.u_factor.value) * this._frameEasing;
+    this._simulationSpring.material.uniforms.u_factor.value += (r - this._simulationSpring.material.uniforms.u_factor.value) * this._frameEasing;
+    this._material.customUniforms[12].value.x += (this._params.basePosition.x - this._material.customUniforms[12].value.x) * this._frameEasing;
+    this._material.customUniforms[12].value.y += (this._params.basePosition.y - this._material.customUniforms[12].value.y) * this._frameEasing;
   }
 }
 var ln = require("./3967.cjs");
@@ -5931,250 +6293,82 @@ function Dn(e, t, n) {
   }
   return e;
 }
-// "Обробка": a rubber stamp comes down onto the flat lying document, hits it, leaves an ink imprint and lifts off.
-// It lives in the document's local space: the group transform below mirrors what the particle vertex shader does
-// (view-space translate by u_offset, then rotate by u_rotation, with GLSL rotationMatrix(axis, a) == standard rotation by -a).
+// One automatic top-down press. The body shares placement with the ink
+// printed by the core tile material; no independent ink plane remains.
 class Stamp extends Re.T {
   constructor() {
     super();
     this._ready = false;
-    this._anchor = {
-      x: 1.16,
-      y: -2.4
-    };
-    this._tiltZ = -0.2;
+    this._anchor = STAMP_PLACEMENT;
+    this._tiltZ = STAMP_PLACEMENT.angle;
     this.visible = false;
-  }
-  _lathe(profile, segments) {
-    const pos = [];
-    const nor = [];
-    const idx = [];
-    const n = profile.length;
-    for (let i = 0; i < n; i++) {
-      const a = profile[Math.max(0, i - 1)];
-      const b = profile[Math.min(n - 1, i + 1)];
-      let nr = b[1] - a[1];
-      let nh = -(b[0] - a[0]);
-      const l = Math.hypot(nr, nh) || 1;
-      nr /= l;
-      nh /= l;
-      for (let j = 0; j <= segments; j++) {
-        const t = j / segments * Math.PI * 2;
-        pos.push(Math.cos(t) * profile[i][0], Math.sin(t) * profile[i][0], profile[i][1]);
-        nor.push(Math.cos(t) * nr, Math.sin(t) * nr, nh);
-      }
-    }
-    for (let i = 0; i < n - 1; i++) {
-      for (let j = 0; j < segments; j++) {
-        const a = i * (segments + 1) + j;
-        const b = a + segments + 1;
-        idx.push(a, b, a + 1, a + 1, b, b + 1);
-      }
-    }
-    const g = new Xt.u();
-    g.setAttribute("position", new Kt.a$(pos, 3));
-    g.setAttribute("normal", new Kt.a$(nor, 3));
-    g.setIndex(new Kt.ql(idx, 1));
-    return g;
+    this._playback = new StampPlayback();
+    this._onVisibilityChange = () => this._playback.resetClock();
+    document.addEventListener("visibilitychange", this._onVisibilityChange);
   }
   init(markTexture, bodyTexture) {
     markTexture.flipY = true;
     bodyTexture.flipY = true;
-    // Crisp stamp edges when the sprite is viewed at an angle (mipmaps are on by default for these images).
     markTexture.anisotropy = bodyTexture.anisotropy = Math.min(8, u.WebGL.renderer.capabilities.getMaxAnisotropy());
     bodyTexture.needsUpdate = true;
     markTexture.needsUpdate = true;
-    const hidden = () => new Be.v({
-      opacity: 0,
-      transparent: true
-    });
-    // Camera-facing sprite cut from the designer's S-01.svg (scripts/cutout-stamp.mjs); 1 unit wide base, h/w = 1.478.
+    const hidden = () => new Be.v({ opacity: 0, transparent: true });
+    const vertexShader = "varying vec2 vUv;\nvoid main() {\n  vUv = uv;\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n}";
+    const fragmentShader = "uniform sampler2D t_map;\nuniform float u_opacity;\nvarying vec2 vUv;\nvoid main() {\n  vec4 t = texture2D(t_map, vUv);\n  gl_FragColor = vec4(t.rgb, t.a * u_opacity);\n}";
+    // The top-down PNG retains the imprint's full canvas and transparent
+    // margins. Its size matches the page-space ink mapping in the core shader.
     this._bodyMat = new Xe.j({
       transparent: true,
       depthTest: false,
       depthWrite: false,
       uniforms: {
-        t_map: {
-          value: bodyTexture
-        },
-        u_opacity: {
-          value: 0
-        }
+        t_map: { value: bodyTexture },
+        u_opacity: { value: 0 }
       },
-      vertexShader: "varying vec2 vUv;\nvoid main() {\n  vUv = uv;\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n}",
-      fragmentShader: "uniform sampler2D t_map;\nuniform float u_opacity;\nvarying vec2 vUv;\nvoid main() {\n  vec4 t = texture2D(t_map, vUv);\n  gl_FragColor = vec4(t.rgb, t.a * u_opacity);\n}"
+      vertexShader,
+      fragmentShader
     });
-    const bodyGeometry = new at._(1, 1.478);
-    bodyGeometry.translate(0, 0.739, 0);
-    this._body = new Ie.K(bodyGeometry, this._bodyMat);
-    this._tiltQ = new Rt._();
-    this._zAxis = new He.P(0, 0, 1);
+    this._body = new Ie.K(new at._(1, 1), this._bodyMat);
+    this._body.position.set(this._anchor.x, this._anchor.y, 0.2);
+    this._body.rotation.z = this._tiltZ;
+    this._body.scale.set(STAMP_PLACEMENT.size, STAMP_PLACEMENT.size, 1);
     this._body.renderOrder = 21;
     this._body.frustumCulled = false;
     this._body.customDepthMaterial = hidden();
     this.add(this._body);
-    this._markMat = new Xe.j({
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-      uniforms: {
-        t_map: {
-          value: markTexture
-        },
-        u_opacity: {
-          value: 0
-        }
-      },
-      vertexShader: "varying vec2 vUv;\nvoid main() {\n  vUv = uv;\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n}",
-      fragmentShader: "uniform sampler2D t_map;\nuniform float u_opacity;\nvarying vec2 vUv;\nvoid main() {\n  vec4 t = texture2D(t_map, vUv);\n  gl_FragColor = vec4(t.rgb, t.a * u_opacity);\n}"
-    });
-    this._mark = new Ie.K(new at._(1, 1), this._markMat);
-    this._mark.renderOrder = 20;
-    this._mark.frustumCulled = false;
-    this._mark.customDepthMaterial = hidden();
-    this._mark.position.set(this._anchor.x, this._anchor.y, 0.2);
-    this._mark.rotation.z = this._tiltZ;
-    this.add(this._mark);
-    // Soft contact shadow on the paper under the stamp: grows darker and tighter as the stamp comes down.
-    this._shadowMat = new Xe.j({
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-      uniforms: {
-        u_opacity: {
-          value: 0
-        }
-      },
-      vertexShader: "varying vec2 vUv;\nvoid main() {\n  vUv = uv;\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n}",
-      fragmentShader: "uniform float u_opacity;\nvarying vec2 vUv;\nvoid main() {\n  float d = length(vUv - 0.5) * 2.0;\n  float a = smoothstep(1.0, 0.15, d);\n  gl_FragColor = vec4(0.016, 0.07, 0.16, a * a * u_opacity);\n}"
-    });
-    this._shadow = new Ie.K(new at._(1, 0.62), this._shadowMat);
-    this._shadow.renderOrder = 19;
-    this._shadow.frustumCulled = false;
-    this._shadow.customDepthMaterial = hidden();
-    this.add(this._shadow);
     this._ready = true;
   }
   update() {
     if (!this._ready || !this.parent) return;
     const cones = this.parent;
     const sp = u.sectionProgress;
-    const on = sp > 3.4 && sp < 4.8;
-    this.visible = on;
-    if (!on) {
-      cones._impact.set(0, 0, 0);
-      return;
-    }
-    const clamp01 = x => Math.min(1, Math.max(0, x));
+    cones._impact.set(0, 0, 0);
     const off = cones._depthMaterial.customUniforms.u_offset.value;
     const rot = cones._depthMaterial.customUniforms.u_rotation.value;
     const k = cones._material.customUniforms[3].value / 4.35;
+    const formation = cones._material.customUniforms[14].value;
+    const explode = cones._material.customUniforms[13].value;
+    const ready = Math.abs(formation - 3) < 0.01 && explode < 0.01
+      && Math.abs(off.x - cones._params.basePosition.x) < 0.02;
+    const pose = this._playback.update({
+      progress: sp,
+      ready,
+      now: performance.now(),
+      hidden: document.hidden,
+      reducedMotion: u.reducedMotion
+    });
+    this.visible = sp >= documentPhases.stampAssembleStart && sp < documentPhases.stampScatterEnd;
+    const pageOpacity = zt((formation - 2.55) / 0.44, 0, 1) * (1 - cones._timeline.stampScatter);
+    cones._stampInkUniform.value = this.visible ? pose.ink * pageOpacity : 0;
+    this._bodyMat.uniforms.u_opacity.value = ready && sp >= documentPhases.stampAssembleEnd ? pose.opacity : 0;
+    const size = STAMP_PLACEMENT.size * pose.scale;
+    this._body.scale.set(size, size, 1);
+    if (!this.visible) return;
+    // Match the page-space ink placement while the body is visible. Once it
+    // leaves, only the core tiles remain and each carries its own ink fragment.
     this.position.set(off.x, off.y, 0);
     this.rotation.set(-rot.x, -rot.y, -rot.z);
     this.scale.setScalar(k);
-    if (u.reducedMotion) {
-      this._bodyMat.uniforms.u_opacity.value = 0;
-      this._shadowMat.uniforms.u_opacity.value = 0;
-      const ink = clamp01((sp - 3.78) / 0.12) * (1 - clamp01((sp - 4.4) / 0.15));
-      this._markMat.uniforms.u_opacity.value = ink;
-      this._mark.scale.set(1.4, 1.4, 1);
-      cones._impact.set(0, 0, 0);
-      return;
-    }
-    // ---- Multi-step stamping (sectionProgress) ----------------------------------------------------------
-    // 3.45-3.80 swoops in from above-left and slows down  ->  3.80-3.92 hovers and aims (sway, shadow forms)
-    // 3.92 FIRST press (light, 55% ink)  ->  4.04-4.15 lifts, tilts and re-aims  ->  4.15 SECOND press (firm,
-    // ink to 100%, ink pop, twist wobble)  ->  4.32-4.42 lifts away; the imprint stays and fades after 4.55.
-    const H1 = 3.92;
-    const H2 = 4.15;
-    const REST = 0.14;
-    const HIGH = 1.6;
-    const HOVER = 0.7;
-    const LIFT = 0.55;
-    const seg = (a, b) => clamp01((sp - a) / (b - a));
-    const lerp = (a, b, t) => a + (b - a) * t;
-    const easeOut = t => 1 - Math.pow(1 - t, 3);
-    const easeIn = t => t * t * t;
-    const easeIO = t => t * t * (3 - 2 * t);
-    let z = HIGH;
-    let dx = 0;
-    let dy = 0;
-    let twist = 0;
-    if (sp < 3.8) {
-      const t = easeOut(seg(3.45, 3.8));
-      z = lerp(HIGH, HOVER, t);
-      dx = lerp(-0.9, -0.14, t);
-      dy = lerp(2.2, 0.5, t);
-      twist = lerp(0.32, 0.04, t);
-    } else if (sp < H1) {
-      const t = easeIO(seg(3.8, H1));
-      z = lerp(HOVER, 0.5, t);
-      dx = lerp(-0.14, 0.04, t) + Math.sin(sp * 55) * 0.025 * (1 - t);
-      dy = lerp(0.5, 0.12, t) + Math.cos(sp * 47) * 0.02 * (1 - t);
-      twist = lerp(0.04, 0, t);
-    } else if (sp < H1 + 0.04) {
-      z = lerp(0.5, REST, easeIn(seg(H1, H1 + 0.04)));
-      dx = 0.04;
-      dy = 0.12 * (1 - easeIn(seg(H1, H1 + 0.04)));
-    } else if (sp < 4.04) {
-      const s = (sp - H1 - 0.04) / 0.08;
-      z = REST + 0.16 * Math.exp(-6 * s) * Math.abs(Math.sin(s * Math.PI * 2));
-      dx = 0.04 * (1 - clamp01(s));
-    } else if (sp < 4.1) {
-      const t = easeOut(seg(4.04, 4.1));
-      z = lerp(REST, LIFT, t);
-      dx = lerp(0, 0.16, t);
-      dy = lerp(0, 0.14, t);
-      twist = lerp(0, 0.14, t);
-    } else if (sp < H2) {
-      const t = easeIO(seg(4.1, H2));
-      z = lerp(LIFT, 0.36, t);
-      dx = lerp(0.16, 0, t);
-      dy = lerp(0.14, 0.05, t);
-      twist = lerp(0.14, 0, t);
-    } else if (sp < H2 + 0.04) {
-      const t = easeIn(seg(H2, H2 + 0.04));
-      z = lerp(0.36, REST, t);
-      dy = 0.05 * (1 - t);
-    } else if (sp < 4.32) {
-      const s = (sp - H2 - 0.04) / 0.13;
-      z = REST + 0.07 * Math.exp(-7 * s) * Math.abs(Math.sin(s * Math.PI * 2));
-      twist = 0.1 * Math.exp(-4.5 * s) * Math.sin(s * Math.PI * 3.2);
-    } else {
-      const t = easeIn(seg(4.32, 4.42));
-      z = lerp(REST, HIGH, t);
-      dx = lerp(0, -0.6, t);
-      dy = lerp(0, 1.4, t);
-      twist = lerp(0, -0.18, t);
-    }
-    this._body.position.set(this._anchor.x + dx, this._anchor.y + dy, z);
-    // the sprite cancels the document's tilt/rotation so the stamp stands upright on screen
-    this._body.quaternion.copy(this.quaternion).invert();
-    this._tiltQ.setFromAxisAngle(this._zAxis, this._tiltZ + twist);
-    this._body.quaternion.multiply(this._tiltQ);
-    const squash = 1 - 0.04 * Math.exp(-12 * Math.max(0, sp - H1)) * (sp >= H1 && sp < H1 + 0.2 ? 1 : 0) - 0.06 * Math.exp(-10 * Math.max(0, sp - H2)) * (sp >= H2 && sp < H2 + 0.25 ? 1 : 0);
-    this._body.scale.set(1, squash, 1);
-    const bodyAlpha = clamp01((sp - 3.42) / 0.13) * (1 - clamp01((sp - 4.32) / 0.1));
-    this._bodyMat.uniforms.u_opacity.value = bodyAlpha;
-    // imprint: light first press, firm second press, fades after the stamp has left
-    const ink = (clamp01((sp - H1) / 0.03) * 0.55 + clamp01((sp - H2) / 0.04) * 0.45) * (1 - clamp01((sp - 4.55) / 0.15));
-    this._markMat.uniforms.u_opacity.value = ink;
-    const pop = sp >= H2 ? 1 + 0.1 * (1 - clamp01((sp - H2) / 0.06)) : 1 + 0.05 * (1 - clamp01((sp - H1) / 0.05));
-    this._mark.scale.set(1.4 * pop, 1.4 * pop, 1);
-    // contact shadow follows the stamp: faint and wide while high, dark and tight when it touches the paper
-    const near = 1 - clamp01((z - REST) / (HIGH - REST));
-    const near2 = near * near;
-    this._shadow.position.set(this._anchor.x + dx * 0.4 + 0.08, this._anchor.y + dy * 0.4 - 0.1, 0.17);
-    this._shadow.rotation.z = this._tiltZ;
-    const shadowSize = lerp(2.9, 1.5, near);
-    this._shadow.scale.set(shadowSize, shadowSize, 1);
-    this._shadowMat.uniforms.u_opacity.value = bodyAlpha * (0.1 + 0.5 * near2);
-    // ripple in the leaves under each press
-    const sa = clamp01((sp - H1) / 0.18);
-    const sb = clamp01((sp - H2) / 0.22);
-    const imp1 = sp >= H1 && sp < H1 + 0.18 ? -Math.exp(-3.5 * sa) * Math.cos(sa * Math.PI * 2.5) * 0.3 : 0;
-    const imp2 = sp >= H2 && sp < H2 + 0.22 ? -Math.exp(-3.2 * sb) * Math.cos(sb * Math.PI * 2.5) * 0.6 : 0;
-    cones._impact.set(this._anchor.x * k, this._anchor.y * k, imp1 + imp2);
   }
 }
 // Shared folder used by all three finale previews. Variants only change how this
@@ -6189,14 +6383,24 @@ class Folder extends Re.T {
     this._materials = [];
     this._assemble = { value: 1 }; // 0 = sheets scattered, 1 = assembled; shared by every sheet material
     this._scatter = { value: 0 };  // 0 in reduced motion (no flight)
-    this._cells = u.isMobile ? 30 : 40;
+    this._burst = { value: 0 };
+    this._hoverWeight = { value: 0 };
+    this._pointer = { x: 0, y: 0 };
+    this._previousPointer = null;
+    this._pointerMoved = false;
+    this._hoverActive = false;
+    this._lastHoverTime = null;
+    this._maskPoint = new He.P();
+    this._maskFar = new He.P();
+    // Rectangular cells retain the document's .72:1 proportions near the old
+    // instance budget (1632 desktop / 875 mobile per layer).
+    this._grid = new i.F(u.isMobile ? 35 : 48, u.isMobile ? 25 : 34);
     this._width = 5.9;
     this._height = 7.21;
     this.visible = false;
   }
-  // Textured planes from the designer's files (public/assets/folder/*), all drawn on the same 2048x2048 canvas:
-  // cover (outside, with tab) and pocket as supplied; back wall and inside of the cover use folder-panel.png
-  // (cover without tab/band, derived by scripts/cutout-folder.mjs).
+  // Light folder artwork shares the document v2 palette and existing 2048 canvas layout.
+  // ?foldersheets=0 retains a flat reference for visual comparison.
   _material(texture, side) {
     texture.flipY = true;
     texture.anisotropy = 8;
@@ -6220,85 +6424,93 @@ class Folder extends Re.T {
     this._materials.push(material);
     return material;
   }
-  // Folder built from the same kind of sheets as the document. Each plane is a cells x cells instanced grid;
-  // every sheet samples its own cell of the designer's texture (the designer files are used as supplied).
+  // The same GLB, atlas, grade and grid density as the main document mosaic.
   _sheetMaterial(texture, side) {
     texture.flipY = true;
-    texture.anisotropy = 8;
+    texture.anisotropy = Math.min(8, u.WebGL.renderer.capabilities.getMaxAnisotropy());
     texture.needsUpdate = true;
     const material = new Xe.j({
       transparent: true,
       depthTest: false,
       depthWrite: false,
-      uniforms: {
+      uniforms: Object.assign({
         t_map: { value: texture },
+        t_documentAtlas: { value: u.WebGL.assets.textures.document_atlas },
         u_opacity: { value: 0 },
         u_assemble: this._assemble,
         u_scatter: this._scatter,
-        u_cells: { value: this._cells },
+        u_burst: this._burst,
+        u_hoverWeight: this._hoverWeight,
+        u_gap: this.parent._finaleGapUniform,
+        u_grid: { value: this._grid },
         u_size: { value: this._canvas }
-      },
+      }, paperTune),
       vertexShader: [
-        "attribute vec2 a_cell;",
-        "attribute vec4 a_rand;",
-        "uniform float u_assemble;",
-        "uniform float u_scatter;",
-        "uniform float u_cells;",
-        "uniform float u_size;",
-        "varying vec2 vTexUv;",
-        "varying float vShade;",
+        "attribute vec2 a_cell; attribute vec4 a_rand; attribute float a_fill; attribute vec4 a_stageScatter;",
+        "uniform float u_assemble; uniform float u_scatter; uniform float u_burst; uniform vec2 u_grid; uniform float u_size; uniform float u_hoverWeight; uniform float u_gap;",
+        "varying vec2 vTexUv; varying vec2 vLocalUv; varying float vSeed; varying float vFace; varying float vBack; varying float vSettle; varying float vFill;",
         "void main() {",
-        "  vec2 cuv = (a_cell + 0.5) / u_cells;",
+        "  vec2 cuv = (a_cell + 0.5) / u_grid;",
         "  vec2 home = (cuv - 0.5) * u_size;",
         "  float delay = cuv.x * 0.35 + (1.0 - cuv.y) * 0.25 + a_rand.w * 0.25;",
-        "  float t = clamp((u_assemble - delay * 0.6) / 0.4, 0.0, 1.0);",
-        "  // ease-out-back with a small overshoot: each sheet snaps into its cell, like the document mosaic",
+        "  float t = clamp((u_assemble - delay * 0.6) / (1.0 - delay * 0.6), 0.0, 1.0);",
         "  float e = 1.0 + 1.9 * pow(t - 1.0, 3.0) + 0.9 * pow(t - 1.0, 2.0);",
         "  vec2 fly = (a_rand.xy - 0.5) * u_size * 1.6 * u_scatter;",
         "  float spin = (1.0 - clamp(e, 0.0, 1.0)) * (a_rand.z - 0.5) * 2.0 * u_scatter;",
-        "  vec2 center = mix(home + fly, home, e);",
-        "  float cs = cos(spin);",
-        "  float sn = sin(spin);",
-        "  vec2 local = position.xy * (u_size / u_cells) * 1.025;",
+        "  vec2 center = mix(home + fly, home, e) + fly * u_burst;",
+        "  spin += a_stageScatter.w * u_hoverWeight;",
+        "  float cs = cos(spin); float sn = sin(spin);",
+        "  float settled = smoothstep(0.25, 0.95, t);",
+        "  vec2 local = position.xy / vec2(0.72, 1.0) * (u_size / u_grid) * mix(1.025, 1.0 - u_gap, settled);",
         "  vec2 rotated = vec2(cs * local.x - sn * local.y, sn * local.x + cs * local.y);",
-        "  vTexUv = (a_cell + mix(vec2(0.004), vec2(0.996), uv)) / u_cells;",
-        "  vShade = 0.975 + 0.035 * a_rand.y;",
-        "  // flat: sheets stay in the picture plane, no z-lift",
-        "  gl_Position = projectionMatrix * modelViewMatrix * vec4(center + rotated, 0.0, 1.0);",
+        "  vLocalUv = clamp(uv - 2.0 * step(vec2(1.5), uv), 0.0, 1.0);",
+        "  vTexUv = (a_cell + vLocalUv) / u_grid;",
+        "  vSeed = a_rand.x; vFace = abs(normal.z); vBack = step(1.5, uv.x); vSettle = smoothstep(0.25, 0.95, t); vFill = a_fill;",
+        "  gl_Position = projectionMatrix * modelViewMatrix * vec4(vec3(center + rotated, 0.0) + a_stageScatter.xyz * u_hoverWeight, 1.0);",
         "}"
       ].join("\n"),
       fragmentShader: [
-        "uniform sampler2D t_map;",
-        "uniform float u_opacity;",
-        "varying vec2 vTexUv;",
-        "varying float vShade;",
+        paperFragmentDecl,
+        "uniform sampler2D t_map; uniform sampler2D t_documentAtlas; uniform float u_opacity;",
+        "varying vec2 vTexUv; varying vec2 vLocalUv; varying float vSeed; varying float vFace; varying float vBack; varying float vSettle; varying float vFill;",
         "void main() {",
-        "  vec4 t = texture2D(t_map, vTexUv);",
-        "  float a = t.a * u_opacity;",
-        "  if (a < 0.003) discard;",
-        "  // flat paper like the assembled document: no side darkening, only a tiny per-sheet tone",
-        "  gl_FragColor = vec4(t.rgb * vShade, a);",
+        "  if (vFace < 0.5 || vBack > 0.5 || (vFill > 0.5 && vSettle < 0.995) || (vFill < 0.5 && vSettle >= 0.995)) discard;",
+        "  vec4 surface = texture2D(t_map, vTexUv);",
+        "  if (surface.a * u_opacity < 0.003) discard;",
+        "  float index = floor(vSeed * 11.999);",
+        "  vec2 tile = vec2(mod(index, 4.0), floor(index / 4.0));",
+        "  vec2 atlasUv = (tile + mix(vec2(0.18, 0.025), vec2(0.82, 0.975), vLocalUv)) / vec2(4.0, 3.0);",
+        "  vec3 loosePaper = texture2D(t_documentAtlas, atlasUv).rgb;",
+        "  vec3 paperLit = mix(loosePaper, surface.rgb, vSettle) * 0.94;",
+        "  paperLit = paperMicroRelief(paperLit, vLocalUv, vSeed, vSettle);",
+        paperColorGrade(),
+        "  gl_FragColor = vec4(paperLit, surface.a * u_opacity);",
         "}"
       ].join("\n")
-
     });
     material.side = side;
     this._materials.push(material);
     return material;
   }
   _sheets(texture, side, order, x, flipY) {
-    const cells = this._cells;
-    const count = cells * cells;
-    const geometry = new at._(1, 1);
+    const cols = this._grid.x;
+    const rows = this._grid.y;
+    const count = cols * rows;
+    const geometry = this._tileGeometry.clone();
     const cell = new Float32Array(count * 2);
     const rand = new Float32Array(count * 4);
     for (let i = 0; i < count; i++) {
-      cell[i * 2] = i % cells;
-      cell[i * 2 + 1] = Math.floor(i / cells);
-      for (let k = 0; k < 4; k++) rand[i * 4 + k] = Math.random();
+      cell[i * 2] = i % cols;
+      cell[i * 2 + 1] = Math.floor(i / cols);
+      // Stable across reloads, variants and scroll direction.
+      for (let k = 0; k < 4; k++) {
+        const n = Math.sin((i + 1) * 127.1 + k * 311.7) * 43758.5453;
+        rand[i * 4 + k] = n - Math.floor(n);
+      }
     }
     geometry.setAttribute("a_cell", new kt.l(cell, 2));
     geometry.setAttribute("a_rand", new kt.l(rand, 4));
+    geometry.setAttribute("a_stageScatter", new kt.l(new Float32Array(count * 4), 4));
     const mesh = new Lt.S(geometry, this._sheetMaterial(texture, side), count);
     mesh.renderOrder = order;
     mesh.frustumCulled = false;
@@ -6306,8 +6518,17 @@ class Folder extends Re.T {
     if (flipY) mesh.rotation.y = Math.PI;
     return mesh;
   }
+  _setupTileGeometry() {
+    // Share the same flight silhouette and complete assembled paper face as the
+    // final visa page. Discard the main formation's unused instance attributes.
+    this._tileGeometry = this.parent._geometry.clone();
+    for (const name of Object.keys(this._tileGeometry.attributes)) {
+      if (!["position", "normal", "uv", "a_fill"].includes(name)) this._tileGeometry.deleteAttribute(name);
+    }
+  }
   init(textures) {
-    if (this._ready || !textures.cover || !textures.pocket || !textures.panel) return;
+    if (this._ready || !textures.cover || !textures.pocket || !textures.panel || !textures.back) return;
+    this._setupTileGeometry();
     // cover-alpha body is 1526 x 1865 px of the 2048 canvas; map its width to this._width world units
     const scale = this._width / 1526;
     const canvas = 2048 * scale;
@@ -6327,72 +6548,206 @@ class Folder extends Re.T {
       : plane(this._material(texture, side), order, x, flipY);
     this._motion = new Re.T();
     this.add(this._motion);
-    this._motion.add(place(textures.panel, 2, -32));
-    // the pocket is ~44% of the folder height; it is drawn behind the VISA sheets so the word stays fully legible
-    this._motion.add(place(textures.pocket, 2, -31));
+    this._back = place(textures.back, 2, -32);
+    this._motion.add(this._back);
+    // The pocket covers the lower page; the visa label remains above its lip.
+    this._pocket = place(textures.pocket, 2, 25);
+    this._motion.add(this._pocket);
     this._coverPivot = new Re.T();
     this._coverPivot.position.x = -this._width * 0.5;
     this._motion.add(this._coverPivot);
-    this._coverPivot.add(place(textures.panel, 0, 29, this._width * 0.5, true));
-    this._coverPivot.add(place(textures.cover, 0, 30, this._width * 0.5));
+    this._coverInside = place(textures.panel, 2, 29, this._width * 0.5);
+    this._coverOutside = place(textures.cover, 2, 30, this._width * 0.5);
+    this._coverPivot.add(this._coverInside, this._coverOutside);
+    this._coverHit = this._makeSurfaceHit(this._coverOutside, textures.cover);
+    this._pocketHit = this._makeSurfaceHit(this._pocket, textures.pocket);
+    if (folderSheets) {
+      const count = this._grid.x * this._grid.y;
+      this._hoverAttribute = this._coverOutside.geometry.attributes.a_stageScatter;
+      this._hoverValues = this._hoverAttribute.array;
+      this._hoverTargets = new Float32Array(count * 4);
+      this._hoverVelocities = new Float32Array(count * 4);
+      this._hoverHitTimes = new Float64Array(count);
+    }
     this._ready = true;
   }
-  update() {
+  _makeSurfaceHit(mesh, texture) {
+    // Cached once: no GPU readback or per-frame canvas work.
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 256;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    context.drawImage(texture.image, 0, 0, 256, 256);
+    return { mesh, alpha: context.getImageData(0, 0, 256, 256).data,
+      projection: new It.y(), inverse: new It.y() };
+  }
+  _projectSurface(hit) {
+    const camera = u.WebGL.particleCamera;
+    hit.mesh.updateWorldMatrix(true, false);
+    camera.updateWorldMatrix(true, false);
+    hit.projection.multiplyMatrices(camera.matrixWorldInverse, hit.mesh.matrixWorld);
+    hit.projection.premultiply(camera.projectionMatrix);
+    // A/C's entrance and the hinge can be exactly edge-on. Never invert that frame.
+    if (Math.abs(hit.projection.determinant()) < 1e-10) return false;
+    hit.inverse.copy(hit.projection).invert();
+    return true;
+  }
+  _surfacePoint(hit, x, y) {
+    const near = this._maskPoint.set(x, y, -1).applyMatrix4(hit.inverse);
+    const far = this._maskFar.set(x, y, 1).applyMatrix4(hit.inverse);
+    const dz = far.z - near.z;
+    if (Math.abs(dz) < 1e-8) return null;
+    const t = -near.z / dz;
+    if (t < 0 || t > 1) return null;
+    return far.sub(near).multiplyScalar(t).add(near);
+  }
+  _hasSurface(hit, x, y) {
+    const uvX = x / this._canvas + 0.5, uvY = y / this._canvas + 0.5;
+    if (uvX < 0 || uvX > 1 || uvY < 0 || uvY > 1) return false;
+    const ix = Math.min(255, Math.floor(uvX * 256));
+    const iy = Math.min(255, Math.floor((1 - uvY) * 256));
+    return hit.alpha[(iy * 256 + ix) * 4 + 3] > 32;
+  }
+  preparePageMask() {
+    this._pageMaskReady = this._ready && this._projectSurface(this._pocketHit);
+  }
+  pagePointVisible(x, y) {
+    if (!this._pageMaskReady) return false;
+    const point = this._surfacePoint(this._pocketHit, x, y);
+    return !!point && !this._hasSurface(this._pocketHit, point.x, point.y);
+  }
+  onMousemove(pointer) {
+    this._pointer.x = pointer.x;
+    this._pointer.y = pointer.y;
+    this._pointerMoved = true;
+  }
+  onMouseleave() {
+    this._previousPointer = null;
+    this._pointerMoved = false;
+    this._clearHover();
+  }
+  _clearHover() {
+    if (!this._hoverValues) return;
+    this._hoverValues.fill(0);
+    this._hoverTargets.fill(0);
+    this._hoverVelocities.fill(0);
+    this._hoverHitTimes.fill(0);
+    this._hoverAttribute.needsUpdate = true;
+  }
+  _updateHover(weight) {
+    const now = performance.now();
+    const dt = Math.min(0.05, Math.max(0, (now - (this._lastHoverTime ?? now)) / 1000));
+    this._lastHoverTime = now;
+    const enabled = folderSheets && weight > 0 && !u.finaleTransition && this.parent._finaleFrameSettled !== false && u.finaleMode === "folder" && !u.isMobile && !u.reducedMotion
+      && !reducedMotionQuery.matches && this.parent._stageHoverQuery.matches && document.hasFocus();
+    this._hoverWeight.value = enabled ? weight : 0;
+    if (!enabled || !this._hoverActive) {
+      if (this._hoverActive) this._clearHover();
+      this._previousPointer = null;
+      this._pointerMoved = false;
+    }
+    this._hoverActive = enabled;
+    if (!enabled || !this._projectSurface(this._coverHit)) return;
+    let segment = null;
+    if (this._pointerMoved) {
+      const previous = this._previousPointer;
+      this._previousPointer = { ...this._pointer };
+      if (previous && Math.hypot((previous.x - this._pointer.x) * u.window.w / 2,
+        (previous.y - this._pointer.y) * u.window.h / 2) > 0.5) {
+        segment = [previous.x * u.window.w / 2, previous.y * u.window.h / 2,
+          this._pointer.x * u.window.w / 2, this._pointer.y * u.window.h / 2];
+      }
+    }
+    this._pointerMoved = false;
+    const tune = this.parent._scatterTune;
+    const returnSeconds = Math.max(0.2, tune.returnSeconds);
+    let dirty = false;
+    for (let index = 0; index < this._hoverHitTimes.length; index++) {
+      const x = ((index % this._grid.x + 0.5) / this._grid.x - 0.5) * this._canvas;
+      const y = ((Math.floor(index / this._grid.x) + 0.5) / this._grid.y - 0.5) * this._canvas;
+      if (segment && this._hasSurface(this._coverHit, x, y)) {
+        const screen = this._maskPoint.set(x, y, 0).applyMatrix4(this._coverHit.projection);
+        const impulse = cursorImpulse(index, screen.x * u.window.w / 2, screen.y * u.window.h / 2, segment, dt, tune);
+        if (impulse) {
+          const hit = this._surfacePoint(this._coverHit, impulse.hitX / (u.window.w / 2), impulse.hitY / (u.window.h / 2));
+          if (hit && this._hasSurface(this._coverHit, hit.x, hit.y)) {
+            const target = this._surfacePoint(this._coverHit, impulse.x / (u.window.w / 2), impulse.y / (u.window.h / 2));
+            if (target) {
+              const offset = index * 4;
+              this._hoverTargets[offset] = target.x - x;
+              this._hoverTargets[offset + 1] = target.y - y;
+              this._hoverTargets[offset + 2] = 0.1 * impulse.weight;
+              this._hoverTargets[offset + 3] = impulse.tilt;
+              this._hoverHitTimes[index] = now;
+            }
+          }
+        }
+      }
+      dirty = stepScatterCell(index, now, dt, returnSeconds, this._hoverValues,
+        this._hoverTargets, this._hoverVelocities, this._hoverHitTimes) || dirty;
+    }
+    if (dirty) this._hoverAttribute.needsUpdate = true;
+  }
+  update(time) {
     if (!this._ready || !this.parent) return;
     const cones = this.parent;
     const sp = u.sectionProgress;
-    const end = u.isMobile ? 5.8 : 6;
-    const on = sp > 5.5;
-    this.visible = on;
-    if (!on) {
+    const timeline = cones._timeline;
+    this.visible = sp > 5.5 && timeline.folderOpacity > 0.001;
+    if (!this.visible) {
       this._opacity.value = 0;
+      this._updateHover(0);
       return;
     }
-    const clamp01 = x => Math.min(1, Math.max(0, x));
-    const smooth = x => x * x * (3 - 2 * x);
     const easeOut = x => 1 - Math.pow(1 - x, 3);
-    const t = clamp01((sp - 5.7) / (end - 5.7));
+    const t = timeline.folderEnter;
     const off = cones._depthMaterial.customUniforms.u_offset.value;
     const rot = cones._depthMaterial.customUniforms.u_rotation.value;
     const k = cones._material.customUniforms[3].value / 4.35;
-    this.position.set(off.x, off.y, 0);
-    // The folder has its own legible entrance choreography. Reusing the
-    // document's temporary X/Y tilt makes the cover fill the viewport midway
-    // through the transition, so only the shared final Z drift is inherited.
-    this.rotation.set(0, 0, -rot.z);
+    // Core's final-page idle is shader-local; the open folder keeps its own base.
+    this.position.set(off.x - cones._idleOffset.x, off.y - cones._idleOffset.y, 0);
+    this.rotation.set(0, 0, -(rot.z - cones._idleRotation.z));
     this.scale.setScalar(k);
-    let variant = u.isMobile ? "c" : u.folderVariant;
-    if (u.reducedMotion) variant = "reduced";
-    let open = smooth(t);
-    let flipX = 1; // cos(flip angle): orthographic projection of the Y flip, no perspective
+    const closedWeight = paperSmooth(timeline.folderAssemble, 0.95, 1)
+      * (1 - paperSmooth(sp, 6.1, 6.2));
+    const idleWeight = u.reducedMotion || reducedMotionQuery.matches ? 0
+      : closedWeight * zt(cones._idleTune.strength, 0, 2) * (u.isMobile ? 0.5 : 1);
+    const pose = idlePose(time, idleWeight);
+    this.updateWorldMatrix(true, false);
+    const camera = u.WebGL.particleCamera;
+    camera.updateWorldMatrix(true, false);
+    const depth = Math.max(0.001, -this._maskPoint.setFromMatrixPosition(this.matrixWorld).applyMatrix4(camera.matrixWorldInverse).z);
+    const projection = camera.projectionMatrix.elements;
+    this.position.x += pose.x * 2 * depth / (projection[0] * u.window.w);
+    this.position.y += pose.y * 2 * depth / (projection[5] * u.window.h);
+    this.rotation.x = -pose.rx;
+    this.rotation.y = -pose.ry;
+    this.rotation.z -= pose.rz;
+    const variant = u.reducedMotion ? "reduced" : u.isMobile ? "c" : u.folderVariant;
+    let flipX = 1;
     let slideX = 0;
     let scale = 1;
     if (variant === "a") {
-      const flip = easeOut(clamp01(t / 0.62));
-      flipX = Math.cos((1 - flip) * Math.PI);
-      open = smooth(clamp01((t - 0.46) / 0.54));
+      flipX = Math.cos((1 - easeOut(t)) * Math.PI);
     } else if (variant === "b") {
-      open = smooth(clamp01(t / 0.38));
-      scale = 0.92 + easeOut(t) * 0.08 + Math.sin(t * Math.PI) * 0.05; // flat pulse in the picture plane
+      scale = 0.92 + easeOut(t) * 0.08 + Math.sin(t * Math.PI) * 0.05;
     } else if (variant === "c") {
-      const slide = easeOut(t);
-      slideX = -(u.isMobile ? 3.2 : 5) * (1 - slide);
-      open = smooth(clamp01((t - 0.28) / 0.72));
-    } else {
-      open = smooth(t);
+      slideX = -(u.isMobile ? 3.2 : 5) * (1 - easeOut(t));
     }
     this._motion.position.set(slideX, 0, 0);
     this._motion.rotation.set(0, 0, 0);
     this._motion.scale.set(scale * flipX, scale, 1);
-    // Hinge on the left edge. The cover opens by scaling x (orthographic, so it stays flat).
-    // Past 90 degrees the scale is negative: three.js culls the front-only cover and the inside panel (DoubleSide) shows instead.
     const openAngle = u.isMobile ? 1.72 : 2.15;
-    this._coverPivot.rotation.set(0, 0, 0);
-    this._coverPivot.scale.set(Math.cos(openAngle * open), 1, 1);
-    const fadeStart = u.reducedMotion ? 5.66 : 5.54;
-    this._opacity.value = smooth(clamp01((sp - fadeStart) / 0.18));
-    this._assemble.value = folderSheets && !u.reducedMotion ? clamp01((sp - 5.5) / 0.24) : 1;
+    const coverScale = Math.cos(openAngle * timeline.folderOpen);
+    this._coverPivot.scale.set(coverScale, 1, 1);
+    // A negative scale is a flat hinge, not a physical face flip. Select the
+    // light inside explicitly, avoiding mirrored cover printing after opening.
+    this._coverOutside.visible = coverScale >= 0;
+    this._coverInside.visible = coverScale < 0;
+    this._opacity.value = timeline.folderOpacity;
+    this._assemble.value = folderSheets && !u.reducedMotion ? timeline.folderAssemble : 1;
     this._scatter.value = u.reducedMotion ? 0 : 1;
+    this._burst.value = timeline.folderBurst;
+    this._updateHover(timeline.folderAssemble >= 1 && timeline.folderEnter >= 1 ? closedWeight : 0);
     this._materials.forEach(material => {
       material.uniforms.u_opacity.value = this._opacity.value;
     });
@@ -6408,7 +6763,7 @@ class bn {
       this._updateCamera();
       this._layer.update(e);
       this._cones.update(e);
-      this._folder.update();
+      this._folder.update(e);
       this._stamp.update();
       this._frontCones.update(e);
       this._composer.update({
@@ -6580,6 +6935,7 @@ class bn {
     this.particleCamera.updateProjectionMatrix();
     this.globalUniforms.uResolution.value.set(u.window.w * this.renderer.getPixelRatio(), u.window.h * this.renderer.getPixelRatio());
     this._layer.resize();
+    this._folder?.onMouseleave();
     this._cones.resize({
       camera: this.particleCamera
     });
@@ -6603,6 +6959,7 @@ class bn {
       this._m.y = (t.clientY / window.innerHeight - 0.5) * -2;
       this._cones.onMousemove(this._m);
       this._frontCones.onMousemove(this._m);
+      this._folder.onMousemove(this._m);
     }
   }
   onMouseup() {
@@ -6611,6 +6968,7 @@ class bn {
   onMouseleave() {
     this._cones.onMouseleave();
     this._frontCones.onMouseleave();
+    this._folder.onMouseleave();
   }
   onAssetsLoaded() {
     u.WebGL.assets.textures.document_position_exr.minFilter = u.WebGL.assets.textures.document_position_exr.magFilter = Le.TyD;
@@ -6625,8 +6983,7 @@ class bn {
     const documentVisa = u.WebGL.assets.textures.document_visa;
     if (documentVisa) {
       documentVisa.flipY = true;
-      documentVisa.minFilter = documentVisa.magFilter = Le.TyD;
-      documentVisa.generateMipmaps = false;
+      documentVisa.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
       documentVisa.needsUpdate = true;
     }
     const documentAtlas = u.WebGL.assets.textures.document_atlas;
@@ -6646,7 +7003,8 @@ class bn {
     this._folder.init({
       cover: u.WebGL.assets.textures.folder_cover,
       pocket: u.WebGL.assets.textures.folder_pocket,
-      panel: u.WebGL.assets.textures.folder_panel
+      panel: u.WebGL.assets.textures.folder_panel,
+      back: u.WebGL.assets.textures.folder_back_panel
     });
     this._frontCones.onAssetsLoaded();
     if (u.WebGL.assets.textures.stamp_mark && u.WebGL.assets.textures.stamp_body) this._stamp.init(u.WebGL.assets.textures.stamp_mark, u.WebGL.assets.textures.stamp_body);
@@ -6688,10 +7046,17 @@ class wn extends bt {
     _n(this, "onResize", () => {
       this.bcr = this.el.getBoundingClientRect();
       this.bcrTop = this.bcr.top + u.ASS.currentPos;
+      // Include the legacy margin before Document review in this section's
+      // progress. A shorter stage must not assemble early inside that gap
+      // and then jump backwards when the next section enters.
+      this.progressHeight = this._firstScatter && this.el.nextElementSibling
+        ? this.el.nextElementSibling.getBoundingClientRect().top - this.bcr.top
+        : this.bcr.height;
     });
     _n(this, "onRaf", () => {
       if (u.sectionIndex === this.id) {
-        u.sectionProgress = u.sectionIndex + Math.abs((u.ASS.currentPos - this.bcrTop) / this.bcr.height);
+        const local = (u.ASS.currentPos - this.bcrTop) / Math.max(1, this.progressHeight);
+        u.sectionProgress = u.sectionIndex + (this._firstScatter ? zt(local, 0, 1) : Math.abs(local));
       }
     });
     _n(this, "enter", () => {
@@ -6712,6 +7077,7 @@ class wn extends bt {
     });
     this.id = t;
     this.name = Ne(this.el, "section-name");
+    this._firstScatter = this.el.classList.contains("first-scatter-stage");
     this.bcr = this.el.getBoundingClientRect();
     this.onResize();
     this.observe();
@@ -6774,6 +7140,7 @@ class Sn {
   }
   build() {
     this.sections = ue(".js-section");
+    this.fitFirstScatter();
     this.components = [];
     this.sections.forEach((e, t) => {
       this.components.push(new wn(e, t));
@@ -6781,6 +7148,20 @@ class Sn {
     Object.assign(u.components, {
       sections: this.components
     });
+  }
+  fitFirstScatter() {
+    const index = this.sections.findIndex(el => el.classList.contains("first-scatter-stage"));
+    if (index <= 0 || index >= this.sections.length - 1) return;
+    const stage = this.sections[index];
+    const before = this.sections[index - 1].getBoundingClientRect();
+    const current = stage.getBoundingClientRect();
+    const after = this.sections[index + 1].getBoundingClientRect();
+    const start = before.top + before.height * (documentPhases.formScatterStart % 1);
+    const end = after.top + after.height * (documentPhases.stampAssembleStart % 1);
+    // CSS subtracts the neighboring tails and margins from the 200svh budget.
+    // Keeping those measurements outside the stage makes this stable on resize.
+    stage.style.setProperty("--first-scatter-surrounding-space", `${end - start - current.height}px`);
+    u.ASS.resize({ width: u.window.w, height: u.window.h });
   }
   addEvents() {
     F.on(O.RESIZE, this.onResize);
@@ -7292,7 +7673,7 @@ if (!u.enableLogs) {
   console.warn = () => {};
   console.error = () => {};
 }
-F.on("DOMContentLoaded", window, function () {
+return new Promise((resolve, reject) => {
   O.detectTouchDevice();
   O.enableMousemove();
   O.enableRAF(true);
@@ -7328,15 +7709,20 @@ F.on("DOMContentLoaded", window, function () {
   });
   u.sectionManager = new Sn();
   u.AssetLoader.load().then(() => {
+    // AssetLoader also waits for fonts; remeasure the compact stage before
+    // building scroll triggers so fallback-font heights cannot extend it.
+    u.sectionManager.onResize();
     if (u.mq.sm.matches) {
       u.Dom2Webgl.enable();
     }
     u.ScrollAnimations.build();
-    u.SiteLoader.enterSite().then(() => {
+    return u.SiteLoader.enterSite().then(() => {
       u.ScrollAnimations.enable();
       u.ASS.enable();
       u.ASS.controller.ease = 0.075;
       u.WebGL.onEnterSite();
+      runtime.status = "running";
+      resolve(u);
       setTimeout(() => {
         (function () {
           const e = window;
@@ -7377,9 +7763,11 @@ F.on("DOMContentLoaded", window, function () {
       }, 1200);
       document.querySelectorAll("img[loading=\"lazy\"]").forEach(e => e.removeAttribute("loading"));
     });
-  });
+  }).catch(reject);
   if (u.mq.sm.matches) {
     u.Dom2Webgl.build();
   }
   yt.init();
 });
+
+}

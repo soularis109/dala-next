@@ -139,7 +139,7 @@ function resolvedPagePoint(index, random) {
 // left/right halves of the band assemble into the left/right halves of the page.
 // On desktop the simulation stretches this bank's X by `heroBandStretch` (legacy/2601.cjs)
 // so the band spans the full viewport; texture positions must stay inside ±formationRadius.
-// Bank 3: the document lying flat for the stamp ("обробка") state. Same 100x100 grid layout as the resolved page
+// Banks 2 and 3: the same flat document for the stamp ("обробка") state. Same 100x100 grid layout as the resolved page
 // (so the 40x40 mosaic tiles it) but perfectly flat: no curvature, straight bottom edge, minimal depth jitter.
 function flatPagePoint(index, random) {
   const column = index % bankSize;
@@ -170,29 +170,17 @@ function scatteredPoint(base, random) {
   ];
 }
 
-function streamPoint(index, random) {
-  const lane = index % 5;
-  const progress = random();
-  const direction = lane % 2 === 0 ? 1 : -1;
-  const x = direction * (-4.05 + progress * 8.1);
-  const laneY = (lane - 2) * 0.78;
-  const y = laneY + Math.sin(progress * Math.PI * 2 + lane * 0.85) * 0.42 + (random() - 0.5) * 0.2;
-  const centerPull = 1 - Math.abs(progress - 0.5) * 2;
-  const z = (random() - 0.5) * (1.45 - centerPull * 0.8);
-  return [x, y, z];
-}
-
 const formations = [[], [], [], []];
 for (let index = 0; index < particleCount; index++) {
   const baseRandom = mulberry32(0xd0c000 + index * 17);
   const scatterRandom = mulberry32(0xd0c100 + index * 31);
-  const streamRandom = mulberry32(0xd0c200 + index * 47);
   const resolvedRandom = mulberry32(0xd0c300 + index * 61);
   const base = resolvedPagePoint(index, baseRandom);
+  const flat = flatPagePoint(index, resolvedRandom);
   formations[0].push(scatteredPoint(base, scatterRandom));
   formations[1].push(base);
-  formations[2].push(streamPoint(index, streamRandom));
-  formations[3].push(flatPagePoint(index, resolvedRandom));
+  formations[2].push(flat);
+  formations[3].push(flat);
 }
 
 const positionPixels = new Float32Array(size * size * 3);
@@ -279,10 +267,6 @@ function pickPaperColor(target, position, random) {
     return colors[Math.floor(random() * colors.length)];
   }
 
-  if (target === 2) {
-    return [palette.navy, palette.navySoft, palette.champagne, palette.paperLight, palette.paper][Math.floor(random() * 5)];
-  }
-
   const value = random();
   if (value < 0.68) return palette.paper;
   if (value < 0.85) return palette.paperLight;
@@ -302,9 +286,11 @@ for (let target = 0; target < 4; target++) {
     const pixelY = bankY + localY;
     const pixelIndex = (pixelY * size + pixelX) * 3;
     const texturePosition = worldToTexture(formations[target][index]);
-    const random = mulberry32(0xc01000 + target * 100_003 + index * 73);
-    const scale = target === 0 ? 0.78 + random() * 0.4 : target === 2 ? 0.42 + random() * 0.26 : 0.38 + random() * 0.24;
-    const color = pickPaperColor(target, formations[target][index], random);
+    // Keep both stamp banks identical in position, scale and color.
+    const materialTarget = target === 2 ? 3 : target;
+    const random = mulberry32(0xc01000 + materialTarget * 100_003 + index * 73);
+    const scale = target === 0 ? 0.78 + random() * 0.4 : 0.38 + random() * 0.24;
+    const color = pickPaperColor(materialTarget, formations[target][index], random);
 
     positionPixels.set(texturePosition, pixelIndex);
     const scaleByte = Math.round(clamp(scale, 0, 1) * 255);
