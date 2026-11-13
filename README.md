@@ -1,3 +1,11 @@
+# dala-next
+
+Preview: https://soularis109.github.io/dala-next/
+
+Pushes to `main` automatically build and deploy the preview through GitHub Actions.
+Use `npm run build:pages` to produce the same static export locally in `out/`.
+The export prefixes legacy asset URLs for GitHub Pages; normal development uses the root URL.
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
