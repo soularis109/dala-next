@@ -3,8 +3,15 @@ const { visaStickerPose } = require("./document-motion.cjs");
 // Shared scroll choreography for desktop and mobile. Each resolve starts only
 // after the preceding formation has broken apart and spent time floating.
 const documentPhases = Object.freeze({
+  formSettleStart: 0.6,
+  formSettleEnd: 1,
+  formSettleStagger: 0.14,
   formScatterStart: 1.8,
   formScatterEnd: 2.2,
+  streamsAssembleStart: 2.45,
+  streamsAssembleEnd: 2.75,
+  streamsScatterStart: 3.05,
+  streamsScatterEnd: 3.22,
   stampAssembleStart: 3.4,
   stampAssembleEnd: 3.65,
   stampScatterStart: 4.6,
@@ -29,12 +36,20 @@ function documentTimeline(progress, { mobile = false, reducedMotion = false, var
     : Math.min(1, Math.max(0, finaleMix));
   const intro = ramp(progress, 0, 1);
   const formScatter = smooth(progress, documentPhases.formScatterStart, documentPhases.formScatterEnd);
+  const streams = smooth(progress, documentPhases.streamsAssembleStart, documentPhases.streamsAssembleEnd);
+  const streamScatter = smooth(progress, documentPhases.streamsScatterStart, documentPhases.streamsScatterEnd);
   const stamp = smooth(progress, documentPhases.stampAssembleStart, documentPhases.stampAssembleEnd);
   const stampScatter = smooth(progress, documentPhases.stampScatterStart, documentPhases.stampScatterEnd);
   const folderEnd = mobile ? 5.8 : 6;
   const finale = smooth(progress, 5.5, folderEnd);
-  const scatter = formScatter * (1 - stamp)
+  const scatter = formScatter * (1 - streams) + streamScatter * (1 - stamp)
     + stampScatter * (1 - finale);
+  // Cumulative turns never reset numerically at a hold. Only their periodic
+  // rotation is rendered; reverse scrolling follows exactly the same path.
+  const flights = [[0.12, 0.84], [1.8, 2.75], [3.05, 3.5], [4.6, mobile ? 5.8 : 5.95]]
+    .map(([start, end]) => smooth(progress, start, end));
+  const flightPhase = flights.reduce((sum, phase) => sum + phase, 0);
+  const flightArc = flights.reduce((sum, phase) => sum + (phase > 0 && phase < 1 ? Math.sin(phase * Math.PI) ** 2 : 0), 0);
   // Entrance variants affect only the folder; the enclosed page stays intact.
   const folderBurst = !mobile && !reducedMotion && variant === "b" && progress > 5.55 && progress < folderEnd
     ? Math.sin(ramp(progress, 5.55, folderEnd) * Math.PI) * 0.45
@@ -50,8 +65,13 @@ function documentTimeline(progress, { mobile = false, reducedMotion = false, var
     visaApplication,
     visaAvailable: folderOpen,
     visaIdleWeight: smooth(folderOpen, 0.9, 1) * (1 - modeMix) + smooth(finale, 0.95, 1) * modeMix,
-    // Banks 2 and 3 share the flat stamp page; preserve the shader's 0..3 range.
-    formation: intro + 2 * stamp,
+    streams,
+    streamScatter,
+    flightPhase,
+    flightArc,
+    flightStrength: reducedMotion ? 0 : mobile ? 0.5 : 1,
+    // Four banks: cloud, form, streams, stamp page.
+    formation: intro + streams + stamp,
     explode: reducedMotion ? scatter * 0.12 : scatter,
     // The automatic stamp's finished imprint fades with the breaking paper.
     stampScatter,

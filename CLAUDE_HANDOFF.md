@@ -1,5 +1,61 @@
 # Dala document animation — handoff for Claude
 
+## Slower hero-to-form assembly — 2026-11-15
+
+`Landing` now has one outer `hero-assembly-stage.js-section`, its preserved original hero, and a 50svh spacer. The original narrow-screen top margin lives on the wrapper; the child margin is zero. This extends measured first-stage travel by exactly half a viewport without adding section indices or changing subsequent stage durations. At 1440×900: 900→1350px; at 390×844: 552.765625→974.765625px. The 300svh scatter budget remains intact.
+
+`documentPhases.formSettleStart/End/Stagger` (0.6/1/0.14) drive `formSettleExpr(cell)` in `legacy/2601.cjs`. The shared GLSL expression staggers lock by column (0..0.12) plus integer-cell row variation (0..0.02); each leaf settles over 0.26 progress. Position/scale/paper flattening and master mosaic ink use the same timing. Rounded cells and modular integer jitter avoid vertex/fragment random precision differences. Existing stamp/release windows, flight choreography, background cloud, intro duration, easing and automatic form fill remain unchanged.
+
+Resize validation also exposed an existing live-array dispatch bug: header/nav re-registration could skip the section manager. Only `global:resize` dispatch now snapshots listeners. Native wheel/resize checks pass at 1920×1080, 1024×768 and 390×844, with matching cached sizes, +50svh and the preserved 300svh budget.
+
+Actual GPU lock/ink probes passed desktop/mobile (max channel difference 0, monotonic weights, three exact reversals, all 1600/900 leaves locked at progress 1). Intermediate scroll poses stay unfilled on pause; form fill starts after assembly and completes normally; desktop hover, reduced motion and later stages passed without GL/JS/shader errors. QA: `/private/tmp/qa-dala-hero-assembly*.mjs`, `/private/tmp/hero-settle-probe.js`, `/private/tmp/qa-dala-hero-scroll.mjs`; images `/private/tmp/dala-hero-assembly-*`. No production build or server restart; physical devices weren't tested. Full reload is required for engine changes because the runtime survives Fast Refresh.
+
+
+## Persistent native stream-scatter cloud — 2026-11-15
+
+Supersedes the large-card background and vortex below. `SurroundingDocuments` now shares the core's geometry, immutable instance attributes, atlas/textures and exact color shader assembly (1600 desktop / 900 mobile). Native `onBeforeCompile` hooks are delegated to; only simulation position input and masked opacity differ. The GPU evaluates the original bank-2 fully scattered steady target using existing position/scale/color textures, tParams3.x and stream fit, then runs the original paper deformation, floating/spin and flight path. No new FBO passes/assets. Core animation/FBO code outside this class is unchanged.
+
+Uniforms are independent from core; textures/attributes are shared read-only, interaction and page ink are disabled. Color/depth reuse the same mask and bent-paper path. GPU masks protect pages, the wide five-stream formation, the open cover and visible text. Opacity complements the actual visible native cloud (hero/explode) and restores the background when core disappears for the folder. Thus the reference scatter isn't doubled; no per-scene background reset. Reduced motion fixes time/flight/float.
+
+Existing-server desktop/mobile phase and finale A/B/C checks passed, with zero GL/JS/shader errors. Same-position full native color render is byte-identical (max diff 0). Direct target/FBO comparison passes at float precision on desktop and with a quantization tolerance for mobile's existing half-float integration; shader/size parity remains exact. GPU idle/replay/reduced tests passed, as did actual wheel scrolling with text and three reversals. Reference: p=3.28 with the old surroundings hidden; `/private/tmp/dala-native-cloud-*`, `/private/tmp/qa-dala-native-cloud*.mjs`, `/private/tmp/native-cloud-parity.js`.
+
+No production build or dev-server restart. A full page reload may be needed to see engine edits because the document-wide runtime deliberately survives Fast Refresh. Physical device QA was not performed.
+
+
+## Living background vortex — 2026-11-15
+
+Supersedes the fixed left/right lanes and preserved near poses below. Only `SurroundingDocuments` changed in the engine; core forms, scatter, hover, stamp, camera framing and finales are untouched. Counts remain 96 desktop (48/32/16) / 36 mobile (18/12/6), with the same assets and instanced color/depth visibility.
+
+`_flowAngle(progress)` advances continuously through 0/π/2π/3π/4π at progress 0/1/2.8/3.8/6.2, then 4.5π at 7. Seeded per-tier angular bins have a mildly denser lobe to alternate the dominant side; individual radii, bounded lag, local idle orbits and spin prevent synchronized motion. XY follows a conical world-space orbit while existing depth cycles retain perspective sizing; near sheets fit a perimeter ellipse and cross the top/bottom. Existing page/DOM fades still protect content. Mobile softens local motion/tilt; reduced motion fixes the whole pose independently of time/scroll.
+
+Existing-server desktop/mobile checks passed: ≥75% previous visibility at all sampled stages, opposite lead sides at consecutive anchors, three exact frozen-time reversals, continuous boundary poses, active idle, static reduced motion, both finales and A/B/C, native wheel scroll and reversals, finite matrices, zero GL/JS/shader errors. QA/frames: `/private/tmp/qa-dala-vortex.mjs`, `/private/tmp/dala-vortex-*`. No server restart or production build.
+
+
+## Denser persistent background — 2026-11-15
+
+`SurroundingDocuments` now has 96 instances on desktop (48 far / 32 mid / 16 near) and 36 on mobile (18 / 12 / 6). Constructor-prepared `_papers` descriptors retain the original IDs and exact near poses; only far/mid instances are appended. Phase bins use `_tierCounts` independently, with seeded jitter for far/mid arrivals and wider outer lanes for additional leaves. Existing speed/size/sway ranges, opacity masks, shared color/depth visibility and reduced motion remain unchanged. No new assets, dependencies, or UI.
+
+Fixed-time existing-server comparison at 1440×900 / 390×844: phase 2.3 visibility counts (>0.05) rose 32→73 / 11→22. All 16/6 near matrices matched before/after at every sampled progress. Reverse poses and reduced-motion static poses passed, with no GL/JS/shader errors. References: `/private/tmp/dala-density-*`, `/private/tmp/qa-dala-density.mjs`. No production build or server restart.
+
+
+## Persistent document flight — 2026-11-15
+
+`SurroundingDocuments` in `legacy/2601.cjs` is now a persistent instanced depth field (48 desktop / 18 mobile), gated only by the existing intro. Three world-space depth bands advance from `sectionProgress` at different rates; wrapping fades at both ends, while time supplies only subtle idle motion. The primary simulation/camera framing and scene choreography are unchanged. Per-instance `a_visibility` is shared by color/depth shaders for smooth page/text protection, near-plane side corridors and viewport fades. Hidden DOM copy is excluded from protection. Reduced motion fixes positions/rotation independently of time and scroll. No assets regenerated or dependencies added.
+
+Existing-server headless desktop/mobile checks passed across phases, reverse, both finales and A/B/C: finite matrices, visible surroundings, GL error zero, no JS/shader errors. Frozen-time reverse poses and reduced-motion static poses matched exactly. Screenshots capture transitions rather than settled primary formations. Details: `docs/animation-scenario.md`, 2026-11-15 entry. No server restart or production build.
+
+
+## Restored streams and spatial transitions — 2026-11-14
+
+Supersedes the no-stream choreography and two-screen budget below. Bank 2 is five seeded wave lanes again (not `index % 5`); banks 0/1/3 and the four-bank texture layout are preserved. Position EXR is explicitly uncompressed. Scales and colors now have their own stream bank. Both FBO paths apply the same responsive `u_streamFit` only to bank 2.
+
+Timeline: form scatter 1.8–2.2 → float → stream assembly 2.45–2.75 → hold until 3.05 → scatter 3.05–3.22 → float until 3.4 → stamp page assembly 3.4–3.65. Existing stamp playback, finale modes, A/B/C and separate folder opening remain. The 1.8–3.4 region now has a measured 300svh budget, retaining section indices and the disabled extra-copy flag.
+
+`documentTimeline` also returns cumulative `flightPhase` (0..4), `flightArc` (0 at holds) and `flightStrength` (desktop 1, mobile .5, reduced 0). Main color/depth share named uniform objects and the same patched vertex path for per-sheet rotations and spiral XYZ offsets. Shader anchors are checked for exactly one match. Folder sheets have their own spiral/depth entrance, settling to the existing common final frame. No new FBO passes or core particles.
+
+Timeline acceptance scenarios were updated. Verification is restricted to one final TypeScript / targeted ESLint batch by AGENTS.md; no builds or server launches. Browser visual acceptance remains unverified for this change.
+
+
 Updated: 2026-11-13
 
 ## Speed-aware first-cloud magnet — 2026-11-13

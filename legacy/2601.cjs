@@ -19,6 +19,7 @@ var i = require("./1138.cjs");
 var r = require("./7542.cjs");
 var o = r;
 const { documentPhases, documentTimeline, normalizeFinaleMode } = require("./document-timeline.cjs");
+const { FormPlayback } = require("./document-form.cjs");
 const { StampPlayback, documentScatterWeight, STAMP_PLACEMENT } = require("./document-stamp.cjs");
 const { smooth: paperSmooth, idlePose, visaStickerPose, stepScatterCell, cursorImpulse } = require("./document-motion.cjs");
 const { installHeroPointer, consumeHeroPointer } = require("./hero-pointer.cjs");
@@ -572,6 +573,12 @@ var F = new class {
   }
   emit(e, ...t) {
     (function (e, t) {
+      // Header/nav handlers re-register themselves on resize. Snapshot this
+      // dispatch so they cannot skip section measurements later in the list.
+      if (e === "global:resize" && _[e]) {
+        for (const listener of _[e].slice()) listener(...t);
+        return;
+      }
       if (_[e]) {
         for (let n = 0; n < _[e].length; n++) {
           _[e][n](...t);
@@ -3489,7 +3496,10 @@ var Ot = {
     url: sharpDocuments ? "/images/document-atlas-micro.png" : "/images/document-atlas-v3.png"
   }, {
     id: "master_form",
-    url: u.isMobile ? "/assets/document/document-v2-2048.png" : "/assets/document/document-v2-4096.png"
+    url: u.isMobile ? "/assets/document/document-form-blank-2048.png" : "/assets/document/document-form-blank-4096.png"
+  }, {
+    id: "form_ink",
+    url: u.isMobile ? "/assets/document/document-form-ink-2048.png" : "/assets/document/document-form-ink-4096.png"
   }, {
     id: "document_visa",
     url: u.isMobile ? "/images/finale/visa-overlay-2048.png" : "/images/finale/visa-overlay-4096.png"
@@ -3680,9 +3690,19 @@ var paperTune = {
 };
 u.paperTune = paperTune;
 // ---- Realistic paper documents: shared GLSL (geometry variation + surface) ----
-// One lock window for the document grid. Covers the assembled page (u_progress 0.84-1.28) and the stamp state (u_progress 2.55+),
-// so the grid is flat and seamless in both sections. u_explode still scatters it.
-var gridLockExpr = "max(smoothstep(0.84, 0.985, clamp(u_progress, 0., 1.)) * (1.0 - smoothstep(1.04, 1.28, u_progress)), smoothstep(2.55, 2.95, u_progress)) * (1.0 - smoothstep(0.02, 0.34, u_explode))";
+// One per-sheet settling window drives position, scale, paper shape and ink.
+// Rounded integer cells keep the stagger identical in vertex/fragment shaders.
+function formSettleExpr(cell) {
+  const jitter = documentPhases.formSettleStagger / 7;
+  const column = documentPhases.formSettleStagger - jitter;
+  const delay = `(${column.toFixed(4)} * floor(${cell}.x + 0.5) / max(u_gridSize - 1.0, 1.0)
+    + ${jitter.toFixed(4)} * mod(dot(floor(${cell} + vec2(0.5)), vec2(17.0, 31.0)), 23.0) / 22.0)`;
+  const start = documentPhases.formSettleStart.toFixed(4);
+  const end = (documentPhases.formSettleEnd - documentPhases.formSettleStagger).toFixed(4);
+  return `smoothstep(${start} + ${delay}, ${end} + ${delay}, clamp(u_progress, 0.0, 1.0))`;
+}
+// Stamp locking and all scatter release windows retain their original timing.
+var gridLockExpr = `max(${formSettleExpr("a_cell")} * (1.0 - smoothstep(1.04, 1.28, u_progress)), smoothstep(2.55, 2.95, u_progress)) * (1.0 - smoothstep(0.02, 0.34, u_explode))`;
 // Each piece keeps the source GLB in flight and a complete paper face when
 // settled. The face belongs to the same instance; there is no full-size plane.
 function documentMosaicGeometry(source) {
@@ -3979,6 +3999,25 @@ function paperFragmentSurface(baseExpr, detail, inkOpacity, mosaic) {
       "vec2 pCell = v_cell;",
       "vec2 pMasterUv = (pCell + clamp(pUv, 0.0, 1.0)) / u_gridSize;",
       "vec3 pMaster = texture2D(t_master, pMasterUv).rgb;",
+      "vec2 formPx = vec2(pMasterUv.x, 1.0 - pMasterUv.y) * vec2(840.0, 1188.0);",
+      "float formRow = clamp(floor((formPx.y - 410.0) / 162.0 + 0.15), 0.0, 2.0);",
+      "float formRight = step(400.0, formPx.x);",
+      "float formStart = formRow * 0.24 + formRight * 0.075;",
+      "float formLocal = clamp((u_formFill - formStart) / 0.21, 0.0, 1.0);",
+      "float formLeft = mix(64.0, 432.0, formRight);",
+      "float formWidth = mix(mix(312.0, 268.0, formRight), mix(258.0, 304.0, formRight), step(0.5, formRow) * (1.0 - step(1.5, formRow)));",
+      "float formMask = (1.0 - smoothstep(formLeft + formWidth * formLocal - 2.0, formLeft + formWidth * formLocal + 2.0, formPx.x)) * step(0.001, formLocal);",
+      "if (formPx.y > 850.0) {",
+      "  float checkT = clamp((u_formFill - 0.82) / 0.18, 0.0, 1.0);",
+      "  float checkFirst = clamp((formPx.x - 72.0) / 7.0, 0.0, 1.0) * 0.35;",
+      "  float checkSecond = 0.35 + clamp((formPx.x - 79.0) / 14.0, 0.0, 1.0) * 0.65;",
+      "  float checkOrder = mix(checkFirst, checkSecond, step(79.0, formPx.x));",
+      "  formMask = (1.0 - smoothstep(checkT - 0.025, checkT + 0.025, checkOrder)) * step(0.001, checkT);",
+      "}",
+      "formMask = mix(formMask, 1.0, step(0.9999, u_formFill));",
+      "formMask = mix(formMask, u_formFill, u_formReduced);",
+      "vec4 formInk = texture2D(t_formInk, pMasterUv);",
+      "pMaster = mix(pMaster, formInk.rgb, formInk.a * formMask);",
       "// Ink is printed into each tile's rest UVs, so it follows that tile's motion.",
       "if (u_stampInk > 0.0) {",
       "  vec2 pStampDelta = (pMasterUv - 0.5) * vec2(4.25, 6.01) - u_stampPlacement.xy;",
@@ -3990,8 +4029,7 @@ function paperFragmentSurface(baseExpr, detail, inkOpacity, mosaic) {
       "  }",
       "}",
       "float pVisaW = clamp(u_visaReveal, 0., 1.);",
-      "float pCellDelay = pHash(dot(pCell, vec2(0.7549, 0.5698))) * 0.12;",
-      "float pIntroMosaic = smoothstep(0.64 + pCellDelay, 0.94 + pCellDelay * 0.35, u_progress) * (1.0 - smoothstep(1.0, 1.35, u_progress));",
+      "float pIntroMosaic = " + formSettleExpr("pCell") + " * (1.0 - smoothstep(1.0, 1.35, u_progress));",
       "float pMosaicW = max(pIntroMosaic, smoothstep(2.55, 2.95, u_progress)) * (1.0 - smoothstep(0.05, 0.5, u_explode));",
       "pFront = mix(pFront, pMaster, clamp(pMosaicW * u_masterMix, 0., 1.));",
       "// Transform in page units to preserve the sticker aspect and angle.",
@@ -4440,7 +4478,7 @@ var heroBandStretch = u.isMobile ? "1.0" : "1.95";
 var tn = "#define GLSLIFY 1\n// mat4 rotMat = rotationMatrix(vec3(0., 0., a_angle.z), a_angle.w);\nvec4 mvPosition = vec4( transformed, 1.0 );\n\n// // Show Animation -----\n// float d = 0.00005;\n// float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * a_order));\n// showVal = qinticInOut(showVal);\n// float radius = mix(u_factor + a_random.x * 3., u_factor, showVal) + u_explode * a_random.y;\n\nvec3 pos = texture2D(t_position, a_id).xyz;\nvec3 basePos = pos;\n\n// pos.x = (pos.x - 0.5) * 2. * radius;\n// pos.y = (pos.y - 0.5) * 2. * radius;\n// pos.z = (pos.z - 0.5) * 2. * radius;\n\n// vec3 pos2 = texture2D(t_position, vec2(a_id.x + 0.5, a_id.y)).xyz;\n// pos2.x = (pos2.x - 0.5) * 2. * radius;\n// pos2.y = (pos2.y - 0.5) * 2. * radius;\n// pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n// vec3 pos3 = texture2D(t_position, vec2(a_id.x, a_id.y + 0.5)).xyz;\n// pos3.x = (pos3.x - 0.5) * 2. * radius;\n// pos3.y = (pos3.y - 0.5) * 2. * radius;\n// pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n// vec3 pos4 = texture2D(t_position, vec2(a_id.x + 0.5, a_id.y + 0.5)).xyz;\n// pos4.x = (pos4.x - 0.5) * 2. * radius;\n// pos4.y = (pos4.y - 0.5) * 2. * radius;\n// pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n// pos = mix(pos, pos2, u_progress);\n// pos = mix(pos, pos3, max(0., u_progress - 1.));\n// pos = mix(pos, pos4, max(0., u_progress - 2.));\n\npos = texture2D(t_simulation, vec2(a_id.x * 2., a_id.y * 2.)).xyz;\n// vec3 basePos = pos;\n\n// Mouse Animation -----\nvec4 mPos = vec4(pos, 1.);\nmPos *= rotationMatrix(vec3(1., 0., 0.), u_rotation.x * -1.);\nmPos *= rotationMatrix(vec3(0., 1., 0.), u_rotation.y * -1.);\nmPos *= rotationMatrix(vec3(0., 0., 1.), u_rotation.z * -1.);\nmPos.y -= 1.;\nmPos.x += u_offset.x;\nmPos.y += u_offset.y;\nvec2 resolution = mix(\n  u_resolution - u_resolution * 0.5,\n  u_resolution2 - u_resolution2 * 0.5,\n  min(1., max(0., u_progress2))\n);\nvec2 m = u_mouse * vec2(1., 1.);\nfloat dist = smoothstep( 1.25 + abs(max(u_delta.x, u_delta.y)), 0., distance(mPos.xy, m * resolution)); \npos.x += dist * sin(u_time * a_random.y) * (a_random.z*0.35 + u_delta.x) * abs( u_explode - 1.);\npos.y += dist * cos(u_time * a_random.y) * (a_random.z* 0.35 + u_delta.y) * abs( u_explode - 1.);\n\n// pos.x += m.x * 0.05;\n// pos.y += m.y * 0.05;\n\n// Offset Position -----\n// pos += u_offset;\n\n// Mouse Animation -----\n// vec4 fake_frag_coord  = mvPosition * vec4(pos, 1.);\n// fake_frag_coord.xyz /= fake_frag_coord.w;\n// fake_frag_coord.w = 1.0 / fake_frag_coord.w;\n// fake_frag_coord.xyz *= vec3 (0.5) + vec3 (0.5);\n// fake_frag_coord.xy  *= u_resolution.xy * 0.5; \n// fake_frag_coord.xy  *= vec2(-1., 1.); \n\n// // Mouse Animation -----\n// vec4 mPos = vec4(pos.xy, 1., 1.);\n// mPos.y -= 1.;\n// mPos.xy += u_offset.xy;\n// // mPos *= rotationMatrix(vec3(1., 0., 0.), u_rotation.x);\n// // mPos *= rotationMatrix(vec3(0., 1., 0.), u_rotation.y);\n// // mPos *= rotationMatrix(vec3(0., 0., 1.), u_rotation.z);\n// vec4 tFluid = texture2D( t_fluid, (mPos.xy + u_resolution * 0.5) / u_resolution );\n// // pos.x += tFluid.r * 0.025;\n// // pos.x -= tFluid.b * 0.025;\n// pos.z -= tFluid.r * 0.01;\n\n// vec2 resolution = u_resolution * 0.5;\n// vec2 m = resolution * u_mouse * vec2(1., 1.);\n// float dist = smoothstep(2., 0., distance(pos.xy + u_offset.xy, m));\n// pos *= max(1., 1. + dist * 0.1 + dist * abs(sin(basePos.y * 120. + u_time * 0.5)) * 0.1);\n\nfloat n = snoise(pos * u_amplitude);\n// float n2 = snoise(pos * u_amplitude2 + u_time * 0.2);\nmat4 rotMat = rotationMatrix(vec3(1., 0., 1.), n);\n// mat4 rotMat2 = rotationMatrix(vec3(0., 1., 0.), mod(u_time * a_random.x * 2., 3.1416 * 2.));\nmat4 rotMat2 = rotationMatrix(vec3(0., 1., 1.), mod(n + u_time, 3.1416 * 2.));\n\nfloat scale = texture2D(t_scale, a_id).x * u_scale;\nfloat scale2 = texture2D(t_scale, vec2(a_id.x + 0.5, a_id.y)).x * u_scale;\nfloat scale3 = texture2D(t_scale, vec2(a_id.x, a_id.y + 0.5)).x * u_scale;\nfloat scale4 = texture2D(t_scale, vec2(a_id.x + 0.5, a_id.y + 0.5)).x * u_scale;\nscale = mix(scale, scale2, u_progress);\nscale = mix(scale, scale3, max(0., u_progress - 1.));\nscale = mix(scale, scale4, max(0., u_progress - 2.));\n\nscale += dist * 0.75 * abs( u_explode - 1.);\n\n#ifdef USE_INSTANCING\n  mat4 instanceMat = instanceMatrix;\n\n  instanceMat[3][0] = instanceMat[3][0] + pos.x;\n  instanceMat[3][1] = instanceMat[3][1] + pos.y;\n  instanceMat[3][2] = instanceMat[3][2] + pos.z;\n\n  mat4 rotMat3 = mat4(calcLookAtMatrix(vec3(instanceMat[3][0] + u_offset.x, instanceMat[3][1] + u_offset.y, instanceMat[3][2]), cameraPosition, 0.));\n\n  // instanceMat[0][0] = instanceMat[0][0] * smoothstep(0., 1., scale);\n  // instanceMat[1][1] = instanceMat[1][1] * smoothstep(0., 1., scale);\n  // instanceMat[2][2] = instanceMat[2][2] * smoothstep(0., 1., scale);\n\n  instanceMat[0][0] = instanceMat[0][0] * scale;\n  instanceMat[1][1] = instanceMat[1][1] * scale;\n  instanceMat[2][2] = instanceMat[2][2] * scale;\n\n  // instanceMat *= rotMat;\n  if (u_mobileRotation > 0.) {\n    instanceMat *= rotMat3;\n  } else {\n    instanceMat *= rotMat2;\n  }\n\n\tmvPosition = instanceMat * mvPosition;\n  // mvPosition.xyz += u_offset;\n#endif\n\n// Offset Position -----\nmat4 modViewMatrix = modelViewMatrix;\nmodViewMatrix[3][0] += u_offset.x;\nmodViewMatrix[3][1] += u_offset.y;\nmodViewMatrix *= rotationMatrix(vec3(1., 0., 0.), u_rotation.x);\nmodViewMatrix *= rotationMatrix(vec3(0., 1., 0.), u_rotation.y);\nmodViewMatrix *= rotationMatrix(vec3(0., 0., 1.), u_rotation.z);\n\nmvPosition = modViewMatrix * mvPosition;\n\n// mat4 testMatrix = modelMatrix;\n// testMatrix[3][0] += u_offset.x;\n// testMatrix *= rotationMatrix(vec3(0., 1., 0.), u_rotation);\n\n// mvPosition2 = testMatrix * mvPosition2;\n\nv_pos = mvPosition.xyz;\nv_pos.z += 10.;\n\n// // Mouse Animation -----\n// vec2 resolution = u_resolution * 0.5;\n// vec2 m = u_mouse * vec2(1., 1.);\n// // float dist = smoothstep(.1, 0., distance(mvPosition.xy / resolution, m));\n// float dist = step(distance(mvPosition.xy / resolution, m), .1);\n// mvPosition.x += dist * sin(u_time * a_random.y) * a_random.z;\n// mvPosition.y += dist * cos(u_time * a_random.y) * a_random.z;\n// // mvPosition.z += dist * cos(u_time * a_random.y) * a_random.z;\n// // mvPosition.z += dist * abs(sin(basePos.y * 120. + u_time * 0.5)) * 1.5;\n\n// vec4 tFluid = texture2D( t_fluid, (mvPosition.xy + vec2(1.) ) * 0.5);\n// mvPosition.x += tFluid.r * 0.01;\n// mvPosition.x -= tFluid.b * 0.01;\n// pos.y += tFluid.g * 0.01;\n// mvPosition.z += tFluid.r * 0.05;\n\ngl_Position = projectionMatrix * mvPosition;\n\nv_id = a_id;\nv_hover = dist;";
 var nn = "#define GLSLIFY 1\n//\n// Description : Array and textureless GLSL 2D/3D/4D simplex \n//               noise functions.\n//      Author : Ian McEwan, Ashima Arts.\n//  Maintainer : stegu\n//     Lastmod : 20201014 (stegu)\n//     License : Copyright (C) 2011 Ashima Arts. All rights reserved.\n//               Distributed under the MIT License. See LICENSE file.\n//               https://github.com/ashima/webgl-noise\n//               https://github.com/stegu/webgl-noise\n// \n\nvec3 mod289(vec3 x) {\n  return x - floor(x * (1.0 / 289.0)) * 289.0;\n}\n\nvec4 mod289(vec4 x) {\n  return x - floor(x * (1.0 / 289.0)) * 289.0;\n}\n\nvec4 permute(vec4 x) {\n     return mod289(((x*34.0)+10.0)*x);\n}\n\nvec4 taylorInvSqrt(vec4 r)\n{\n  return 1.79284291400159 - 0.85373472095314 * r;\n}\n\nfloat snoise(vec3 v)\n  { \n  const vec2  C = vec2(1.0/6.0, 1.0/3.0) ;\n  const vec4  D = vec4(0.0, 0.5, 1.0, 2.0);\n\n// First corner\n  vec3 i  = floor(v + dot(v, C.yyy) );\n  vec3 x0 =   v - i + dot(i, C.xxx) ;\n\n// Other corners\n  vec3 g = step(x0.yzx, x0.xyz);\n  vec3 l = 1.0 - g;\n  vec3 i1 = min( g.xyz, l.zxy );\n  vec3 i2 = max( g.xyz, l.zxy );\n\n  //   x0 = x0 - 0.0 + 0.0 * C.xxx;\n  //   x1 = x0 - i1  + 1.0 * C.xxx;\n  //   x2 = x0 - i2  + 2.0 * C.xxx;\n  //   x3 = x0 - 1.0 + 3.0 * C.xxx;\n  vec3 x1 = x0 - i1 + C.xxx;\n  vec3 x2 = x0 - i2 + C.yyy; // 2.0*C.x = 1/3 = C.y\n  vec3 x3 = x0 - D.yyy;      // -1.0+3.0*C.x = -0.5 = -D.y\n\n// Permutations\n  i = mod289(i); \n  vec4 p = permute( permute( permute( \n             i.z + vec4(0.0, i1.z, i2.z, 1.0 ))\n           + i.y + vec4(0.0, i1.y, i2.y, 1.0 )) \n           + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));\n\n// Gradients: 7x7 points over a square, mapped onto an octahedron.\n// The ring size 17*17 = 289 is close to a multiple of 49 (49*6 = 294)\n  float n_ = 0.142857142857; // 1.0/7.0\n  vec3  ns = n_ * D.wyz - D.xzx;\n\n  vec4 j = p - 49.0 * floor(p * ns.z * ns.z);  //  mod(p,7*7)\n\n  vec4 x_ = floor(j * ns.z);\n  vec4 y_ = floor(j - 7.0 * x_ );    // mod(j,N)\n\n  vec4 x = x_ *ns.x + ns.yyyy;\n  vec4 y = y_ *ns.x + ns.yyyy;\n  vec4 h = 1.0 - abs(x) - abs(y);\n\n  vec4 b0 = vec4( x.xy, y.xy );\n  vec4 b1 = vec4( x.zw, y.zw );\n\n  //vec4 s0 = vec4(lessThan(b0,0.0))*2.0 - 1.0;\n  //vec4 s1 = vec4(lessThan(b1,0.0))*2.0 - 1.0;\n  vec4 s0 = floor(b0)*2.0 + 1.0;\n  vec4 s1 = floor(b1)*2.0 + 1.0;\n  vec4 sh = -step(h, vec4(0.0));\n\n  vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;\n  vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;\n\n  vec3 p0 = vec3(a0.xy,h.x);\n  vec3 p1 = vec3(a0.zw,h.y);\n  vec3 p2 = vec3(a1.xy,h.z);\n  vec3 p3 = vec3(a1.zw,h.w);\n\n//Normalise gradients\n  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));\n  p0 *= norm.x;\n  p1 *= norm.y;\n  p2 *= norm.z;\n  p3 *= norm.w;\n\n// Mix final noise value\n  vec4 m = max(0.5 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);\n  m = m * m;\n  return 105.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), \n                                dot(p2,x2), dot(p3,x3) ) );\n  }";
 var rn = "#define GLSLIFY 1\nfloat qinticOut(float t) {\n  // return 1.0 - (pow(t - 1.0, 5.0));\n  return 1.0 - pow(1.0 - t , 5.0);\n  // return 1.0 - ((t - 1.0)*(t - 1.0)*(t - 1.0)*(t - 1.0)*(t - 1.0));\n}\n";
-var on = "#define GLSLIFY 1\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return step(inValue , 0.5) * inValue + step(0.5,outValue) * outValue;\n}\n";
+var on = "#define GLSLIFY 1\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return x < 0.5 ? inValue : outValue;\n}\n";
 var sn = "precision highp float;\n#define GLSLIFY 1\n\nuniform mat4 projectionMatrix;\nuniform mat4 modelMatrix;\nuniform mat4 viewMatrix;\nuniform mat4 modelViewMatrix;\n\nattribute lowp vec2 position;\nattribute highp vec2 uv;\n\nvarying vec2 vUv;\n\nvoid main() {\n\n  vUv = uv;\n\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 0., 1.);\n}\n";
 tn = tn.replace("pos = texture2D(t_simulation, vec2(a_id.x * 2., a_id.y * 2.)).xyz;\n// vec3 basePos = pos;", "pos = texture2D(t_simulation, vec2(a_id.x * 2., a_id.y * 2.)).xyz;\nvec2 tileUv = (a_cell + 0.5) / u_gridSize;\nfloat tileFactor = u_factor / 4.35;\nvec3 tilePos = vec3((tileUv.x - 0.5) * 4.25, (tileUv.y - 0.5) * 6.01, 0.0);\ntilePos.z = 0.12;\ntilePos *= tileFactor;\nfloat tileLock = __GRID_LOCK__;\npos = mix(pos, tilePos, tileLock);\nfloat introFly = 1.0 - smoothstep(0.0, 1.0, clamp(u_show, 0., 1.));\nfloat chaosMotion = max(clamp(u_motion, 0., 1.) * (1.0 - smoothstep(0.08, 0.88, clamp(u_progress, 0., 1.))), introFly);\nfloat flightPhase = u_time * (0.55 + a_random.y * 0.8) + a_random.x * 9.3;\npos.x += (sin(flightPhase) + cos(flightPhase * 0.43 + a_random.z * 5.1) * 0.55) * 0.24 * chaosMotion;\npos.y += (cos(flightPhase * 0.79) + sin(flightPhase * 0.37) * 0.45) * 0.19 * chaosMotion;\npos.z += sin(flightPhase * 0.61 + a_random.z * 8.7) * 0.38 * chaosMotion;\n// vec3 basePos = pos;");
 tn = tn.replace("mat4 rotMat2 = rotationMatrix(vec3(0., 1., 1.), mod(n + u_time, 3.1416 * 2.));", "float calmFlutter = sin(u_time * (0.22 + a_random.y * 0.25) + a_random.x * 6.2831) * 0.1 + n * 0.045;\nfloat livelyFlutter = sin(u_time * (0.78 + a_random.y * 0.9) + a_random.x * 10.7) * 0.48 + cos(u_time * 0.51 + a_random.z * 8.3) * 0.2;\nvec3 flutterAxis = normalize(mix(vec3(0., 0., 1.), vec3(a_random.x, 0.7, a_random.z), chaosMotion));\nmat4 rotMat2 = rotationMatrix(flutterAxis, mix(calmFlutter, livelyFlutter, chaosMotion) * (1.0 - tileLock));");
@@ -4483,12 +4521,36 @@ u.heroDensityUniform = heroDensityUniform;
 u.exFloatUniform = exFloatUniform;
 tn = tn.replace("  instanceMat[3][0] = instanceMat[3][0] + pos.x;", "  float hcW = (1.0 - smoothstep(0.08, 0.6, clamp(u_progress, 0., 1.))) * (1.0 - tileLock) * u_heroTilt;\n  float hcA = a_angle.x;\n  float hcB = a_angle.y;\n  float hcC = a_angle.z;\n  float hcD = a_angle.w;\n  float hcSpin = introFly * introFly * (3.0 + hcA * 6.0) * (hcB < 0.5 ? -1.0 : 1.0) * u_heroTilt;\n  float hcSway = sin(u_time * (0.25 + hcC * 0.3) + hcD * 6.2831) * 0.12;\n  mat4 heroTiltRot = rotationMatrix(vec3(1., 0., 0.), ((hcA - 0.5) * 2.0 * 1.0 + hcSway) * hcW + hcSpin)\n    * rotationMatrix(vec3(0., 1., 0.), ((hcB - 0.5) * 2.0 * 1.1) * hcW + hcSpin * 0.7)\n    * rotationMatrix(vec3(0., 0., 1.), ((hcC - 0.5) * 2.0 * 0.6) * hcW + hcSpin * 0.35);\n  pos.z += (hcD - 0.5) * 2.4 * hcW;\n  float exScatter = smoothstep(0.12, 0.7, u_explode) * (1.0 - tileLock);\n  float exW = exScatter * u_heroTilt;\n  float exSpin = exW * (2.0 + hcA * 5.0) * (hcB < 0.5 ? -1.0 : 1.0);\n  float exLive = exScatter * u_exFloat;\n  float exPh = hcD * 6.2831;\n  float exRate = 0.18 + hcC * 0.25;\n  float exWobX = sin(u_time * exRate + exPh) * 0.55 * exLive;\n  float exWobY = cos(u_time * (exRate * 0.83) + exPh * 1.7) * 0.55 * exLive;\n  float exWobZ = sin(u_time * (exRate * 0.61) + exPh * 2.3) * 0.25 * exLive;\n  mat4 exTiltRot = rotationMatrix(vec3(1., 0., 0.), (hcC - 0.5) * 2.4 * exW + exSpin + exWobX)\n    * rotationMatrix(vec3(0., 1., 0.), (hcA - 0.5) * 2.6 * exW + exSpin * 0.8 + exWobY)\n    * rotationMatrix(vec3(0., 0., 1.), (hcD - 0.5) * 1.6 * exW + exSpin * 0.4 + exWobZ);\n  pos.z += (hcB - 0.5) * 3.0 * exW;\n  pos.x += sin(u_time * (0.21 + hcA * 0.27) + hcB * 6.2831) * 0.35 * exLive;\n  pos.y += cos(u_time * (0.17 + hcB * 0.29) + hcC * 6.2831) * 0.28 * exLive;\n  pos.z += sin(u_time * (0.15 + hcD * 0.22) + hcA * 6.2831) * 0.6 * exLive;\n  instanceMat[3][0] = instanceMat[3][0] + pos.x;");
 tn = tn.replace("    instanceMat *= rotMat2;", "    instanceMat *= rotMat2 * heroTiltRot * exTiltRot * rotationMatrix(normalize(vec3(hcA - 0.5, hcB - 0.5, 0.7)), a_stageScatter.w * u_stageScatter);");
+// One vertex path drives both color and depth; no extra meshes or simulation pass.
+// Keep completed turns periodic rather than resetting an eased angle at each hold.
+function replaceFlightShader(source, anchor, replacement) {
+  if (source.split(anchor).length !== 2) throw new Error("Document flight shader anchor changed");
+  return source.replace(anchor, replacement);
+}
+tn = replaceFlightShader(tn, "pos = mix(pos, tilePos, tileLock);", `pos = mix(pos, tilePos, tileLock);
+float flightCycle = fract(u_flightPhase);
+float flightDelay = a_random.x * 0.18;
+float flightTurn = floor(u_flightPhase) + smoothstep(flightDelay, 0.8 + flightDelay, flightCycle);
+float flightAngle = flightTurn * 6.28318530718;
+float flightSign = a_random.y < 0.5 ? -1.0 : 1.0;
+float spinAngle = u_flightStrength > 0.75 ? flightAngle * flightSign : sin(flightAngle) * 3.14159265359 * u_flightStrength;
+vec3 spinAxis = normalize(vec3(a_random.x - 0.5, 0.7, a_random.z - 0.5));
+mat4 flightRotation = rotationMatrix(spinAxis, spinAngle);
+float arcWeight = u_flightArc * u_flightStrength * (1.0 - tileLock);
+float arcAngle = a_random.z * 6.28318530718 + flightAngle * flightSign;
+pos.xy += vec2(cos(arcAngle), sin(arcAngle) * 0.7) * (0.8 + a_random.x) * arcWeight;
+pos.z += sin(arcAngle + a_random.y * 3.0) * 1.8 * arcWeight;`);
+tn = replaceFlightShader(tn, "mvPosition = instanceMat * mvPosition;", "instanceMat *= flightRotation;\nmvPosition = instanceMat * mvPosition;");
 class an extends Re.T {
   constructor({
     fluid: e = null
   } = {}) {
     super();
     this._simulationCount = 10000;
+    this._flightPhaseUniform = { id: "u_flightPhase", type: "float", value: 0 };
+    this._flightArcUniform = { id: "u_flightArc", type: "float", value: 0 };
+    this._flightStrengthUniform = { id: "u_flightStrength", type: "float", value: 0 };
+    this._streamFitUniform = { value: 1 };
     this._impact = new He.P(0, 0, 0); // stamp impact: x/y in simulation space, z = signed strength (written by Stamp)
     this._pointerActiveTarget = 0;
     this._pointerActiveUniform = {
@@ -4522,6 +4584,10 @@ class an extends Re.T {
     this._idleRotation = new He.P();
     this._scatterUniform = { id: "u_stageScatter", type: "float", value: 0 };
     this._stampInkUniform = { id: "u_stampInk", type: "float", value: 0 };
+    this._formReducedUniform = { id: "u_formReduced", type: "float", value: 0 };
+    this._formFillUniform = { id: "u_formFill", type: "float", value: 0 };
+    this._formPlayback = new FormPlayback();
+    document.addEventListener("visibilitychange", () => this._formPlayback.resetClock());
     this._finaleVisibilityUniform = { id: "u_finaleVisibility", type: "float", value: 1 };
     this._finalePaperUniform = { id: "u_finalePaper", type: "float", value: 0 };
     this._finaleLayoutUniform = { id: "u_finaleLayout", type: "float", value: 0 };
@@ -4752,7 +4818,7 @@ class an extends Re.T {
           }
         },
         vertexShader: sn,
-        fragmentShader: "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D t_position;\nuniform sampler2D t_oPos;\nuniform sampler2D t_velocity;\nuniform sampler2D t_params;\nuniform sampler2D t_params2;\n\nuniform float u_factor;\nuniform float u_length;\nuniform float u_show;\nuniform float u_explode;\nuniform float u_progress;\nuniform float u_rendered;\n\nvarying vec2 vUv;\n\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return step(inValue , 0.5) * inValue + step(0.5,outValue) * outValue;\n}\n\nvoid main() {\n  vec4 tOpos = texture2D(t_oPos, vUv);\n  vec3 pos = tOpos.xyz;\n\n  if (u_rendered > 0.) {\n    vec4 tVelocity = texture2D(t_velocity, vUv);\n    pos += tVelocity.xyz;\n\n  } else {\n    vec4 tParams = texture2D(t_params, vUv);\n    vec4 tParams2 = texture2D(t_params2, vUv);\n\n    // Show Animation -----\n    float d = 0.00005;\n    float d2 = 0.0005;\n    float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * tParams.z));\n    showVal = qinticInOut(showVal);\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + u_explode * tParams.y;\n    float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + min(1., max(0., (u_explode * (u_length - 1.)) - d2 * tParams2.w));\n\n    pos = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5)).xyz;\n    vec3 basePos = pos;\n\n    pos.x = (pos.x - 0.5) * 2. * radius;\n    pos.y = (pos.y - 0.5) * 2. * radius;\n    pos.z = (pos.z - 0.5) * 2. * radius;\n\n    vec3 pos2 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5)).xyz;\n    pos2.x = (pos2.x - 0.5) * 2. * radius;\n    pos2.y = (pos2.y - 0.5) * 2. * radius;\n    pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n    vec3 pos3 = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos3.x = (pos3.x - 0.5) * 2. * radius;\n    pos3.y = (pos3.y - 0.5) * 2. * radius;\n    pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n    vec3 pos4 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos4.x = (pos4.x - 0.5) * 2. * radius;\n    pos4.y = (pos4.y - 0.5) * 2. * radius;\n    pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n    pos = mix(pos, pos2, u_progress);\n    pos = mix(pos, pos3, max(0., u_progress - 1.));\n    pos = mix(pos, pos4, max(0., u_progress - 2.));\n  }\n\n  gl_FragColor = vec4(pos, 1.);\n}\n"
+        fragmentShader: "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D t_position;\nuniform sampler2D t_oPos;\nuniform sampler2D t_velocity;\nuniform sampler2D t_params;\nuniform sampler2D t_params2;\n\nuniform float u_factor;\nuniform float u_length;\nuniform float u_show;\nuniform float u_explode;\nuniform float u_progress;\nuniform float u_rendered;\n\nvarying vec2 vUv;\n\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return x < 0.5 ? inValue : outValue;\n}\n\nvoid main() {\n  vec4 tOpos = texture2D(t_oPos, vUv);\n  vec3 pos = tOpos.xyz;\n\n  if (u_rendered > 0.) {\n    vec4 tVelocity = texture2D(t_velocity, vUv);\n    pos += tVelocity.xyz;\n\n  } else {\n    vec4 tParams = texture2D(t_params, vUv);\n    vec4 tParams2 = texture2D(t_params2, vUv);\n\n    // Show Animation -----\n    float d = 0.00005;\n    float d2 = 0.0005;\n    float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * tParams.z));\n    showVal = qinticInOut(showVal);\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + u_explode * tParams.y;\n    float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + min(1., max(0., (u_explode * (u_length - 1.)) - d2 * tParams2.w));\n\n    pos = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5)).xyz;\n    vec3 basePos = pos;\n\n    pos.x = (pos.x - 0.5) * 2. * radius;\n    pos.y = (pos.y - 0.5) * 2. * radius;\n    pos.z = (pos.z - 0.5) * 2. * radius;\n\n    vec3 pos2 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5)).xyz;\n    pos2.x = (pos2.x - 0.5) * 2. * radius;\n    pos2.y = (pos2.y - 0.5) * 2. * radius;\n    pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n    vec3 pos3 = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos3.x = (pos3.x - 0.5) * 2. * radius;\n    pos3.y = (pos3.y - 0.5) * 2. * radius;\n    pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n    vec3 pos4 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos4.x = (pos4.x - 0.5) * 2. * radius;\n    pos4.y = (pos4.y - 0.5) * 2. * radius;\n    pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n    pos = mix(pos, pos2, u_progress);\n    pos = mix(pos, pos3, max(0., u_progress - 1.));\n    pos = mix(pos, pos4, max(0., u_progress - 2.));\n  }\n\n  gl_FragColor = vec4(pos, 1.);\n}\n"
       }),
       scene: true
     });
@@ -4815,16 +4881,24 @@ class an extends Re.T {
           }
         },
         vertexShader: sn,
-        fragmentShader: "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D t_oTarget;\nuniform sampler2D t_position;\nuniform sampler2D t_oVelocity;\nuniform sampler2D t_params;\nuniform sampler2D t_params2;\nuniform sampler2D t_params3;\n\nuniform vec2 u_resolution;\nuniform float u_factor;\nuniform float u_length;\nuniform float u_show;\nuniform float u_explode;\nuniform float u_progress;\nuniform float u_spring;\nuniform float u_friction;\nuniform float u_rendered;\nuniform float u_delay;\n\nvarying vec2 vUv;\n\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return step(inValue , 0.5) * inValue + step(0.5,outValue) * outValue;\n}\n\nvoid main() {\n  float vx = 0.;\n  float vy = 0.;\n  float vz = 0.;\n\n  if (u_rendered > 0.) {\n    vec4 tParams = texture2D(t_params, vUv);\n    vec4 tParams2 = texture2D(t_params2, vUv);\n    vec4 tParams3 = texture2D(t_params3, vUv);\n\n    // Show Animation -----\n    float d = 0.00005;\n    float d3 = 0.00015;\n    float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * tParams.z));\n    showVal = qinticInOut(showVal);\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + u_explode * tParams.y;\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w)) * 6.;\n    float radius = u_factor;\n\n    vec3 pos = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5)).xyz;\n    vec3 basePos = pos;\n\n    pos.x = (pos.x - 0.5) * 2. * radius;\n    pos.y = (pos.y - 0.5) * 2. * radius;\n    pos.z = (pos.z - 0.5) * 2. * radius;\n\n    vec3 pos2 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5)).xyz;\n    pos2.x = (pos2.x - 0.5) * 2. * radius;\n    pos2.y = (pos2.y - 0.5) * 2. * radius;\n    pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n    vec3 pos3 = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos3.x = (pos3.x - 0.5) * 2. * radius;\n    pos3.y = (pos3.y - 0.5) * 2. * radius;\n    pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n    vec3 pos4 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos4.x = (pos4.x - 0.5) * 2. * radius;\n    pos4.y = (pos4.y - 0.5) * 2. * radius;\n    pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xy *= u_resolution * 2.;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xyz *= vec3(u_resolution * 2., u_resolution.x * 2.);\n\n    float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for dekstop\n    pos = mix(pos, pos2, min(1., max(0., ((u_progress * (1. + d4 * (u_length - 1.))) - d4 * tParams2.x))));\n    pos = mix(pos, pos3, min(1., max(0., ((max(0., u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y))));\n    pos = mix(pos, pos4, min(1., max(0., ((max(0., u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z))));\n    pos = mix(pos, pos * tParams3.x, min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w)));\n\n    vec4 tOtarget = texture2D(t_oTarget, vUv);\n    vec4 tOVelocity = texture2D(t_oVelocity, vUv);\n\n    float spring = u_spring + tParams.w;\n    float friction = u_friction;\n\n    float dx = pos.x - tOtarget.x;\n    float dy = pos.y - tOtarget.y;\n    float dz = pos.z - tOtarget.z;\n\n    float ax = dx * spring;\n    float ay = dy * spring;\n    float az = dz * spring;\n\n    vx = tOVelocity.x + ax;\n    vy = tOVelocity.y + ay;\n    vz = tOVelocity.z + az;\n\n    vx *= friction;\n    vy *= friction;\n    vz *= friction;\n  }\n\n  gl_FragColor = vec4(vec3(vx, vy, vz), 1.);\n}\n"
+        fragmentShader: "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D t_oTarget;\nuniform sampler2D t_position;\nuniform sampler2D t_oVelocity;\nuniform sampler2D t_params;\nuniform sampler2D t_params2;\nuniform sampler2D t_params3;\n\nuniform vec2 u_resolution;\nuniform float u_factor;\nuniform float u_length;\nuniform float u_show;\nuniform float u_explode;\nuniform float u_progress;\nuniform float u_spring;\nuniform float u_friction;\nuniform float u_rendered;\nuniform float u_delay;\n\nvarying vec2 vUv;\n\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return x < 0.5 ? inValue : outValue;\n}\n\nvoid main() {\n  float vx = 0.;\n  float vy = 0.;\n  float vz = 0.;\n\n  if (u_rendered > 0.) {\n    vec4 tParams = texture2D(t_params, vUv);\n    vec4 tParams2 = texture2D(t_params2, vUv);\n    vec4 tParams3 = texture2D(t_params3, vUv);\n\n    // Show Animation -----\n    float d = 0.00005;\n    float d3 = 0.00015;\n    float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * tParams.z));\n    showVal = qinticInOut(showVal);\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + u_explode * tParams.y;\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w)) * 6.;\n    float radius = u_factor;\n\n    vec3 pos = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5)).xyz;\n    vec3 basePos = pos;\n\n    pos.x = (pos.x - 0.5) * 2. * radius;\n    pos.y = (pos.y - 0.5) * 2. * radius;\n    pos.z = (pos.z - 0.5) * 2. * radius;\n\n    vec3 pos2 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5)).xyz;\n    pos2.x = (pos2.x - 0.5) * 2. * radius;\n    pos2.y = (pos2.y - 0.5) * 2. * radius;\n    pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n    vec3 pos3 = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos3.x = (pos3.x - 0.5) * 2. * radius;\n    pos3.y = (pos3.y - 0.5) * 2. * radius;\n    pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n    vec3 pos4 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos4.x = (pos4.x - 0.5) * 2. * radius;\n    pos4.y = (pos4.y - 0.5) * 2. * radius;\n    pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xy *= u_resolution * 2.;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xyz *= vec3(u_resolution * 2., u_resolution.x * 2.);\n\n    float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for dekstop\n    pos = mix(pos, pos2, min(1., max(0., ((u_progress * (1. + d4 * (u_length - 1.))) - d4 * tParams2.x))));\n    pos = mix(pos, pos3, min(1., max(0., ((max(0., u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y))));\n    pos = mix(pos, pos4, min(1., max(0., ((max(0., u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z))));\n    pos = mix(pos, pos * tParams3.x, min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w)));\n\n    vec4 tOtarget = texture2D(t_oTarget, vUv);\n    vec4 tOVelocity = texture2D(t_oVelocity, vUv);\n\n    float spring = u_spring + tParams.w;\n    float friction = u_friction;\n\n    float dx = pos.x - tOtarget.x;\n    float dy = pos.y - tOtarget.y;\n    float dz = pos.z - tOtarget.z;\n\n    float ax = dx * spring;\n    float ay = dy * spring;\n    float az = dz * spring;\n\n    vx = tOVelocity.x + ax;\n    vy = tOVelocity.y + ay;\n    vz = tOVelocity.z + az;\n\n    vx *= friction;\n    vy *= friction;\n    vz *= friction;\n  }\n\n  gl_FragColor = vec4(vec3(vx, vy, vz), 1.);\n}\n"
       }),
       scene: true
     });
-    this._simulationSpring.material.fragmentShader = this._simulationSpring.material.fragmentShader.replace("float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for dekstop\n    pos = mix(pos, pos2, min(1., max(0., ((u_progress * (1. + d4 * (u_length - 1.))) - d4 * tParams2.x))));\n    pos = mix(pos, pos3, min(1., max(0., ((max(0., u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y))));\n    pos = mix(pos, pos4, min(1., max(0., ((max(0., u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z))));", "float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for desktop\n    vec3 pos1 = pos;\n    pos1.x *= " + heroBandStretch + ";\n    float introAssemble = clamp((u_progress * (1. + d4 * (u_length - 1.))) - d4 * tParams2.x, 0., 1.);\n    float stampResolve = clamp(((u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y, 0., 1.);\n    float finalResolve = clamp(((u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z, 0., 1.);\n    introAssemble = qinticInOut(introAssemble);\n    vec2 introDelta = pos2.xy - pos1.xy;\n    vec2 introTangent = vec2(-introDelta.y, introDelta.x) / (length(introDelta) + 0.001);\n    pos = mix(pos1, pos2, introAssemble);\n    pos.xy += introTangent * sin(introAssemble * 3.14159265) * (0.16 + tParams.x * 0.22);\n    pos = mix(pos, pos3, stampResolve);\n    pos = mix(pos, pos4, finalResolve);\nfloat flyOrder = clamp(tParams.z / max(u_length, 1.0), 0., 1.);\nfloat flyT = clamp((u_show - flyOrder * 0.5) / 0.5, 0., 1.);\nfloat flyLeft = pow(1.0 - flyT, 2.6);\nfloat flyH1 = fract(sin(dot(vUv, vec2(12.9898, 78.233))) * 43758.5453);\nfloat flyH2 = fract(sin(dot(vUv, vec2(39.3468, 11.135))) * 43758.5453);\nfloat flyAngle = flyH1 * 6.2831853 + tParams.x * 1.5;\nvec2 flyDir = vec2(cos(flyAngle), sin(flyAngle));\nvec2 flyPerp = vec2(-flyDir.y, flyDir.x);\nfloat flyDistance = (5.5 + flyH2 * 3.5) * flyLeft;\nfloat flyArc = sin(flyT * 3.14159265) * (flyH2 - 0.5) * 2.2;\npos.xy += flyDir * flyDistance + flyPerp * flyArc * (0.4 + flyLeft);\npos.z += (flyH2 - 0.5) * 3.0 * flyLeft;");
+    this._simulationSpring.material.fragmentShader = this._simulationSpring.material.fragmentShader.replace("float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for dekstop\n    pos = mix(pos, pos2, min(1., max(0., ((u_progress * (1. + d4 * (u_length - 1.))) - d4 * tParams2.x))));\n    pos = mix(pos, pos3, min(1., max(0., ((max(0., u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y))));\n    pos = mix(pos, pos4, min(1., max(0., ((max(0., u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z))));", "float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for desktop\n    vec3 pos1 = pos;\n    pos1.x *= " + heroBandStretch + ";\n    float introAssemble = clamp((u_progress * (1. + d4 * (u_length - 1.))) - d4 * tParams2.x, 0., 1.);\n    float streamResolve = clamp(((u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y, 0., 1.);\n    float finalResolve = clamp(((u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z, 0., 1.);\n    introAssemble = qinticInOut(introAssemble);\n    vec2 introDelta = pos2.xy - pos1.xy;\n    vec2 introTangent = vec2(-introDelta.y, introDelta.x) / (length(introDelta) + 0.001);\n    pos = mix(pos1, pos2, introAssemble);\n    pos.xy += introTangent * sin(introAssemble * 3.14159265) * (0.16 + tParams.x * 0.22);\n    pos = mix(pos, pos3, streamResolve);\n    pos = mix(pos, pos4, finalResolve);\nfloat flyOrder = clamp(tParams.z / max(u_length, 1.0), 0., 1.);\nfloat flyT = clamp((u_show - flyOrder * 0.5) / 0.5, 0., 1.);\nfloat flyLeft = pow(1.0 - flyT, 2.6);\nfloat flyH1 = fract(sin(dot(vUv, vec2(12.9898, 78.233))) * 43758.5453);\nfloat flyH2 = fract(sin(dot(vUv, vec2(39.3468, 11.135))) * 43758.5453);\nfloat flyAngle = flyH1 * 6.2831853 + tParams.x * 1.5;\nvec2 flyDir = vec2(cos(flyAngle), sin(flyAngle));\nvec2 flyPerp = vec2(-flyDir.y, flyDir.x);\nfloat flyDistance = (5.5 + flyH2 * 3.5) * flyLeft;\nfloat flyArc = sin(flyT * 3.14159265) * (flyH2 - 0.5) * 2.2;\npos.xy += flyDir * flyDistance + flyPerp * flyArc * (0.4 + flyLeft);\npos.z += (flyH2 - 0.5) * 3.0 * flyLeft;");
     this._simulationSpring.material.uniforms.t_position.value = u.WebGL.assets.textures.document_position_exr;
     this._simulationSpring.material.uniforms.t_position.value.minFilter = this._simulationSpring.material.uniforms.t_position.value.magFilter = Le.TyD;
     this._simulationSpring.material.uniforms.t_position.value.flipY = true;
     this._simulationSpring.material.uniforms.t_position.value.needsUpdate = true;
     this._simulationSpring.material.needsUpdate = true;
+    // Fit only bank 2; page dimensions, stamp placement and finale stay unchanged.
+    for (const simulation of [this._simulationPos, this._simulationSpring]) {
+      simulation.material.uniforms.u_streamFit = this._streamFitUniform;
+      simulation.material.fragmentShader = replaceFlightShader(
+        simulation.material.fragmentShader,
+        "pos3.z = (pos3.z - 0.5) * 2. * radius;",
+        "pos3.z = (pos3.z - 0.5) * 2. * radius;\n    pos3 *= u_streamFit;").replace("precision highp float;", "precision highp float;\nuniform float u_streamFit;");
+    }
   }
   _setupGeometry() {
     u.WebGL.assets.models.document.scene.traverse(e => {
@@ -4964,7 +5038,9 @@ class an extends Re.T {
         id: "u_impact",
         type: "vec3",
         value: this._impact
-      }, this._visaRevealUniform, this._finaleLayoutUniform, this._visaOffsetUniform, this._visaScaleUniform, this._visaAngleUniform, this._visaShadowUniform, this._finaleGapUniform, this._finalePaperUniform, this._finaleVisibilityUniform, this._pointerActiveUniform, this._heroMagnetUniform, heroTiltUniform, heroDensityUniform, exFloatUniform, this._scatterUniform, this._stampInkUniform, {
+      }, this._formReducedUniform, this._formFillUniform, {
+        id: "t_formInk", type: "sampler2D", value: u.WebGL.assets.textures.form_ink
+      }, this._flightPhaseUniform, this._flightArcUniform, this._flightStrengthUniform, this._visaRevealUniform, this._finaleLayoutUniform, this._visaOffsetUniform, this._visaScaleUniform, this._visaAngleUniform, this._visaShadowUniform, this._finaleGapUniform, this._finalePaperUniform, this._finaleVisibilityUniform, this._pointerActiveUniform, this._heroMagnetUniform, heroTiltUniform, heroDensityUniform, exFloatUniform, this._scatterUniform, this._stampInkUniform, {
         id: "t_stamp",
         type: "sampler2D",
         value: u.WebGL.assets.textures.stamp_mark
@@ -5214,7 +5290,10 @@ ${e.fragmentShader}`;
         u_heroMagnetWeight: this._heroMagnetUniform,
         u_heroTilt: heroTiltUniform,
         u_heroDensity: heroDensityUniform,
-        u_exFloat: exFloatUniform
+        u_exFloat: exFloatUniform,
+        u_flightPhase: this._flightPhaseUniform,
+        u_flightArc: this._flightArcUniform,
+        u_flightStrength: this._flightStrengthUniform
       },
       onBeforeCompile: function (e) {
         e.vertexShader = nn + e.vertexShader;
@@ -5369,7 +5448,9 @@ ${e.fragmentShader}`;
       && this._visaRevealUniform.value > 0.999 && Math.abs(this._visaScaleUniform.value - 1) < 0.001
       && Math.abs(this._visaOffsetUniform.value.y) < 0.001 && Math.abs(this._visaAngleUniform.value) < 0.001
       && this._material.customUniforms[13].value < 0.04 && Math.abs(this._material.customUniforms[14].value - 3) < 0.01;
-    const weight = enabled && visaReady ? 1 : enabled ? documentScatterWeight(progress, {
+    const formPlaying = progress >= 0.85 && progress < documentPhases.formScatterStart
+      && this._formPlayback.state !== "done";
+    const weight = formPlaying ? 0 : enabled && visaReady ? 1 : enabled ? documentScatterWeight(progress, {
       formation: this._material.customUniforms[14].value,
       explode: this._material.customUniforms[13].value,
       stampDone: u.WebGL._stamp?._playback.state === "done"
@@ -5559,6 +5640,16 @@ ${e.fragmentShader}`;
       this._finaleFrameSettled = u.sectionProgress < 5.5 || (
         Math.abs(this._material.customUniforms[3].value - this._targetFactor) < 0.01
         && this._material.customUniforms[12].value.distanceTo(this._params.basePosition) < 0.01);
+      const fill = this._formPlayback.update({
+        progress: u.sectionProgress,
+        ready: Math.abs(this._material.customUniforms[14].value - 1) < 0.01
+          && this._material.customUniforms[13].value < 0.01
+          && this._material.customUniforms[12].value.distanceTo(this._params.basePosition) < 0.02,
+        now: performance.now(), hidden: document.hidden,
+        reducedMotion: u.reducedMotion || reducedMotionQuery.matches
+      });
+      this._formReducedUniform.value = u.reducedMotion || reducedMotionQuery.matches ? 1 : 0;
+      this._formFillUniform.value = u.sectionProgress >= documentPhases.formScatterStart ? 1 : fill;
       this._applyFormIdle(e);
       this._updateMouse();
       this._updateVisaReveal();
@@ -5601,7 +5692,14 @@ ${e.fragmentShader}`;
     }
   }
   _updateFormation() {
-    const { formation, explode } = this._timeline;
+    const { formation, explode, flightPhase, flightArc, flightStrength } = this._timeline;
+    this._flightPhaseUniform.value += (flightPhase - this._flightPhaseUniform.value) * this._easing;
+    this._flightArcUniform.value += (flightArc - this._flightArcUniform.value) * this._easing;
+    this._flightStrengthUniform.value = flightStrength;
+    const projection = u.WebGL.particleCamera.projectionMatrix.elements;
+    const bankScale = this._factor / 4.35;
+    this._streamFitUniform.value = Math.min(1, 20 / projection[0] * 0.84 / (8.4 * bankScale),
+      20 / projection[5] * 0.76 / (4.2 * bankScale));
     for (const uniforms of [this._simulationPos.material.uniforms, this._simulationSpring.material.uniforms]) {
       uniforms.u_progress.value += (formation - uniforms.u_progress.value) * this._easing;
       uniforms.u_explode.value += (explode - uniforms.u_explode.value) * this._easing;
@@ -6295,6 +6393,188 @@ function Dn(e, t, n) {
 }
 // One automatic top-down press. The body shares placement with the ink
 // printed by the core tile material; no independent ink plane remains.
+// Persistent native stream scatter. Shares the core's mesh data and shader code;
+// its steady scatter target is evaluated on the GPU without another FBO cycle.
+class SurroundingDocuments extends Re.T {
+  constructor() {
+    super();
+    this._opacity = { value: 0 };
+    this._page = { value: new Float32Array(4) };
+    this._pageWeight = { value: 0 };
+    this._blocks = { value: new Float32Array(12 * 4) };
+    this._blockCount = { value: 0 };
+    this._viewport = { value: new i.F(u.window.w, u.window.h) };
+    this._disabledHero = { value: 0 };
+    this._point = new He.P();
+    this._lastMeasure = -Infinity;
+    this._lastProgress = -Infinity;
+    this.visible = false;
+  }
+  init() {
+    const core = u.WebGL._cones;
+    this._count = core._nb;
+    // Independent uniforms, immutable native instance attributes and textures.
+    this._uniforms = Object.fromEntries(core._material.customUniforms.map(uniform => {
+      const value = uniform.value;
+      return [uniform.id, { ...uniform, value: value?.clone && !value.isTexture ? value.clone() : value }];
+    }));
+    const uniforms = this._uniforms;
+    const fixed = { u_progress: 2, u_explode: 1, u_show: 1, u_motion: 0, u_attract: 0,
+      u_stageScatter: 0, u_pointerActive: 0, u_heroMagnetWeight: 0, u_masterMix: 0,
+      u_finaleLayout: 0, u_finalePaper: 0, u_finaleVisibility: 1, u_stampInk: 0,
+      u_visaReveal: 0, u_visaShadow: 0, u_mobileRotation: 0 };
+    for (const [name, value] of Object.entries(fixed)) uniforms[name].value = value;
+    uniforms.u_factor.value = core._factor;
+    uniforms.u_offset.value.set(0, u.isMobile ? 1.2 : 0, 0);
+    uniforms.u_rotation.value.set(0, 0, 0);
+    uniforms.u_impact.value.set(0, 0, 0);
+    this._shared = {
+      t_cloudParams: { value: core._tParams3 },
+      u_cloudStreamFit: core._streamFitUniform,
+      u_cloudOpacity: this._opacity,
+      u_cloudPage: this._page,
+      u_cloudPageWeight: this._pageWeight,
+      u_cloudBlocks: this._blocks,
+      u_cloudBlockCount: this._blockCount,
+      u_cloudViewport: this._viewport
+    };
+    const cloud = this;
+    this._material = new jt({
+      transparent: true, depthWrite: core._material.depthWrite, side: core._material.side,
+      customUniforms: Object.values(uniforms),
+      onBeforeCompile(shader) {
+        // Delegate all paper shape, atlas, lighting and scatter motion to the
+        // original material. Only the position source and opacity differ.
+        core._material.onBeforeCompile.call(this, shader);
+        cloud._patchShader(shader);
+      }
+    });
+    this._material.customProgramCacheKey = () => 'native-stream-cloud-color-v1';
+    this._depthMaterial = new Bt({
+      transparent: true, customUniforms: { ...uniforms },
+      onBeforeCompile(shader) {
+        core._depthMaterial.onBeforeCompile.call(this, shader);
+        // Match the native color pass's bent paper geometry in depth, too.
+        shader.vertexShader = paperVertexDecl + 'varying vec2 v_paperUv;\nvarying float v_paperFace;\n' + shader.vertexShader;
+        shader.vertexShader = replaceFlightShader(shader.vertexShader,
+          'vec4 mvPosition = vec4( transformed, 1.0 );', paperVertexShape('a_angle', 0.09, true));
+        cloud._patchShader(shader);
+      }
+    });
+    this._depthMaterial.depthWrite = core._depthMaterial.depthWrite;
+    this._depthMaterial.fragmentShader = core._depthMaterial.fragmentShader;
+    this._depthMaterial.customProgramCacheKey = () => 'native-stream-cloud-depth-v1';
+    this._mesh = new Lt.S(core._geometry, this._material, this._count);
+    this._mesh.instanceMatrix.array.set(core._mesh.instanceMatrix.array);
+    this._mesh.instanceMatrix.needsUpdate = true;
+    this._mesh.frustumCulled = false;
+    this._mesh.customDepthMaterial = this._depthMaterial;
+    this.add(this._mesh);
+  }
+  _patchShader(shader) {
+    Object.assign(shader.uniforms, this._shared);
+    shader.uniforms.u_heroInteractionWeight = this._disabledHero;
+    const vertexDecl = `
+      uniform sampler2D t_cloudParams;
+      uniform float u_cloudStreamFit;
+      uniform float u_cloudOpacity;
+      uniform vec4 u_cloudPage;
+      uniform float u_cloudPageWeight;
+      uniform vec4 u_cloudBlocks[12];
+      uniform int u_cloudBlockCount;
+      uniform vec2 u_cloudViewport;
+      varying float v_cloudVisibility;
+      float cloudClearance(vec2 point, float radius, vec4 rect) {
+        vec2 d = max(max(rect.xy - point, point - rect.zw), vec2(0.0));
+        return smoothstep(0.0, 24.0, length(d) - radius);
+      }
+    `;
+    shader.vertexShader = vertexDecl + shader.vertexShader;
+    shader.vertexShader = replaceFlightShader(shader.vertexShader,
+      'pos = texture2D(t_simulation, vec2(a_id.x * 2., a_id.y * 2.)).xyz;',
+      `// Exact steady target of the original stream scatter's spring pass.
+       pos = (texture2D(t_position, vec2(a_id.x, a_id.y + 0.5)).xyz - 0.5)
+         * 2.0 * u_factor * u_cloudStreamFit;
+       pos *= texture2D(t_cloudParams, a_id * 2.0).x;`);
+    shader.vertexShader = replaceFlightShader(shader.vertexShader,
+      'gl_Position = projectionMatrix * mvPosition;', `
+      gl_Position = projectionMatrix * mvPosition;
+      vec4 cloudCenter = modViewMatrix * vec4(instanceMat[3].xyz, 1.0);
+      vec4 cloudClip = projectionMatrix * cloudCenter;
+      vec2 cloudPixel = (cloudClip.xy / cloudClip.w * vec2(0.5, -0.5) + 0.5) * u_cloudViewport;
+      float cloudRadius = length(instanceMat[1].xyz) * u_cloudViewport.y * projectionMatrix[1][1]
+        / (2.0 * max(0.1, -cloudCenter.z)) * 0.8;
+      v_cloudVisibility = u_cloudOpacity * mix(1.0,
+        cloudClearance(cloudPixel, cloudRadius, u_cloudPage), u_cloudPageWeight);
+      for (int block = 0; block < 12; block++) {
+        if (block >= u_cloudBlockCount) break;
+        v_cloudVisibility *= cloudClearance(cloudPixel, cloudRadius, u_cloudBlocks[block]);
+      }
+    `);
+    shader.fragmentShader = 'varying float v_cloudVisibility;\n' + shader.fragmentShader;
+    shader.fragmentShader = replaceFlightShader(shader.fragmentShader, 'void main() {',
+      'void main() {\nif (v_cloudVisibility < 0.002) discard;');
+    // Apply the same per-instance opacity after native color/depth output.
+    const end = shader.fragmentShader.lastIndexOf('}');
+    shader.fragmentShader = shader.fragmentShader.slice(0, end)
+      + '\ngl_FragColor.a *= v_cloudVisibility;\n' + shader.fragmentShader.slice(end);
+  }
+  update(time) {
+    if (!this._mesh) return;
+    const core = u.WebGL._cones;
+    if (!core._timeline) return;
+    const reduced = u.reducedMotion || reducedMotionQuery.matches;
+    const progress = u.sectionProgress;
+    const source = core._material.customUniforms;
+    const formation = source[14].value, explode = source[13].value;
+    const nativeCloud = Math.max(1 - paperSmooth(formation, 0.12, 0.88), zt(explode, 0, 1));
+    const nativeVisibility = core._mesh.visible ? core._finaleVisibilityUniform.value : 0;
+    this._opacity.value = source[8].value * (1 - nativeCloud * nativeVisibility);
+    this.visible = this._opacity.value > 0.001;
+    if (!this.visible) return;
+    const uniforms = this._uniforms;
+    uniforms.u_time.value = reduced ? 0 : time;
+    uniforms.u_scale.value = source[5].value;
+    uniforms.u_exFloat.value = reduced ? 0 : exFloatUniform.value;
+    uniforms.u_heroTilt.value = heroTiltUniform.value;
+    uniforms.u_flightPhase.value = reduced ? 0 : core._flightPhaseUniform.value;
+    uniforms.u_flightArc.value = reduced ? 0 : core._flightArcUniform.value;
+    uniforms.u_flightStrength.value = reduced ? 0 : core._flightStrengthUniform.value;
+    this._viewport.value.set(u.window.w, u.window.h);
+    // Protect both the wide five-stream formation and the assembled pages.
+    const form = paperSmooth(progress, 0.65, 1) * (1 - paperSmooth(progress, 1.8, 2.2));
+    const pageWeight = Math.max(form, core._timeline.stamp * (1 - core._timeline.stampScatter), core._timeline.finale);
+    const streamWeight = core._timeline.streams * (1 - core._timeline.streamScatter);
+    const protectStreams = streamWeight > pageWeight;
+    core._updateStageProjection();
+    const factor = source[3].value / 4.35 * (protectStreams ? core._streamFitUniform.value : 1);
+    const halfWidth = protectStreams ? 4.2 : 2.125;
+    const halfHeight = protectStreams ? 2.1 : 3.005;
+    let left = Infinity, right = -Infinity, top = Infinity, bottom = -Infinity;
+    for (const x of [-halfWidth, halfWidth]) for (const y of [-halfHeight, halfHeight]) {
+      this._point.set(x * factor, y * factor, protectStreams ? 0 : 0.12 * factor).applyMatrix4(core._stageProjection);
+      const px = (this._point.x + 1) * u.window.w / 2, py = (1 - this._point.y) * u.window.h / 2;
+      left = Math.min(left, px); right = Math.max(right, px);
+      top = Math.min(top, py); bottom = Math.max(bottom, py);
+    }
+    if (!protectStreams && u.finaleModeMix < 1) left -= (right - left) * core._timeline.folderOpen * (1 - u.finaleModeMix);
+    this._page.value.set([left - 16, top - 16, right + 16, bottom + 16]);
+    this._pageWeight.value = Math.max(pageWeight, streamWeight);
+    if (time < this._lastMeasure || time - this._lastMeasure > 0.1 || Math.abs(progress - this._lastProgress) > 0.02) {
+      this._lastMeasure = time;
+      this._lastProgress = progress;
+      const rects = [...document.querySelectorAll('.introduction .mobile-blur, .manifesto__inner, .manifesto--introduction-container, .team, .investors, .footer__head, .footer__bar, .header, .folder-variant-toggle')]
+        .filter(element => {
+          const style = getComputedStyle(element);
+          return style.visibility !== 'hidden' && style.display !== 'none' && Number(style.opacity) > 0;
+        }).map(element => element.getBoundingClientRect())
+        .filter(rect => rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < u.window.h).slice(0, 12);
+      this._blockCount.value = rects.length;
+      rects.forEach((rect, index) => this._blocks.value.set([rect.left - 8, rect.top - 8, rect.right + 8, rect.bottom + 8], index * 4));
+    }
+  }
+}
+
 class Stamp extends Re.T {
   constructor() {
     super();
@@ -6456,8 +6736,12 @@ class Folder extends Re.T {
         "  float t = clamp((u_assemble - delay * 0.6) / (1.0 - delay * 0.6), 0.0, 1.0);",
         "  float e = 1.0 + 1.9 * pow(t - 1.0, 3.0) + 0.9 * pow(t - 1.0, 2.0);",
         "  vec2 fly = (a_rand.xy - 0.5) * u_size * 1.6 * u_scatter;",
-        "  float spin = (1.0 - clamp(e, 0.0, 1.0)) * (a_rand.z - 0.5) * 2.0 * u_scatter;",
+        "  float spin = (1.0 - clamp(e, 0.0, 1.0)) * 6.28318530718 * (a_rand.z < 0.5 ? -1.0 : 1.0) * u_scatter;",
+        "  float arc = sin(t * 3.14159265359);",
+        "  float orbit = t * 6.28318530718 + a_rand.w * 6.28318530718;",
         "  vec2 center = mix(home + fly, home, e) + fly * u_burst;",
+        "  center += vec2(cos(orbit), sin(orbit) * 0.65) * arc * u_scatter * 1.4;",
+        "  float flightZ = sin(orbit + a_rand.y) * arc * u_scatter * 1.5;",
         "  spin += a_stageScatter.w * u_hoverWeight;",
         "  float cs = cos(spin); float sn = sin(spin);",
         "  float settled = smoothstep(0.25, 0.95, t);",
@@ -6466,7 +6750,9 @@ class Folder extends Re.T {
         "  vLocalUv = clamp(uv - 2.0 * step(vec2(1.5), uv), 0.0, 1.0);",
         "  vTexUv = (a_cell + vLocalUv) / u_grid;",
         "  vSeed = a_rand.x; vFace = abs(normal.z); vBack = step(1.5, uv.x); vSettle = smoothstep(0.25, 0.95, t); vFill = a_fill;",
-        "  gl_Position = projectionMatrix * modelViewMatrix * vec4(vec3(center + rotated, 0.0) + a_stageScatter.xyz * u_hoverWeight, 1.0);",
+        "  float tilt = sin(t * 6.28318530718) * 2.0 * u_scatter;",
+        "  vec3 flyingSheet = vec3(rotated.x, rotated.y * cos(tilt), rotated.y * sin(tilt));",
+        "  gl_Position = projectionMatrix * modelViewMatrix * vec4(vec3(center, flightZ) + flyingSheet + a_stageScatter.xyz * u_hoverWeight, 1.0);",
         "}"
       ].join("\n"),
       fragmentShader: [
@@ -6745,7 +7031,7 @@ class Folder extends Re.T {
     this._coverInside.visible = coverScale < 0;
     this._opacity.value = timeline.folderOpacity;
     this._assemble.value = folderSheets && !u.reducedMotion ? timeline.folderAssemble : 1;
-    this._scatter.value = u.reducedMotion ? 0 : 1;
+    this._scatter.value = u.reducedMotion ? 0 : u.isMobile ? 0.5 : 1;
     this._burst.value = timeline.folderBurst;
     this._updateHover(timeline.folderAssemble >= 1 && timeline.folderEnter >= 1 ? closedWeight : 0);
     this._materials.forEach(material => {
@@ -6766,6 +7052,7 @@ class bn {
       this._folder.update(e);
       this._stamp.update();
       this._frontCones.update(e);
+      this._surroundings.update(e);
       this._composer.update({
         delta: O.deltaTime
       });
@@ -6861,6 +7148,8 @@ class bn {
     this._cones.add(this._stamp);
     this._folder = new Folder();
     this._cones.add(this._folder);
+    this._surroundings = new SurroundingDocuments();
+    this.particleScene.add(this._surroundings);
     this._frontCones = new Ht();
     this._frontCones.position.set(0, 0, 0.1);
     this.particleScene.add(this._frontCones);
@@ -6980,6 +7269,10 @@ class bn {
       masterForm.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
       masterForm.needsUpdate = true;
     }
+    const formInk = u.WebGL.assets.textures.form_ink;
+    formInk.flipY = true;
+    formInk.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+    formInk.needsUpdate = true;
     const documentVisa = u.WebGL.assets.textures.document_visa;
     if (documentVisa) {
       documentVisa.flipY = true;
@@ -7007,6 +7300,7 @@ class bn {
       back: u.WebGL.assets.textures.folder_back_panel
     });
     this._frontCones.onAssetsLoaded();
+    this._surroundings.init();
     if (u.WebGL.assets.textures.stamp_mark && u.WebGL.assets.textures.stamp_body) this._stamp.init(u.WebGL.assets.textures.stamp_mark, u.WebGL.assets.textures.stamp_body);
     this._layer.onAssetsLoaded();
     this.resize();
@@ -7046,7 +7340,7 @@ class wn extends bt {
     _n(this, "onResize", () => {
       this.bcr = this.el.getBoundingClientRect();
       this.bcrTop = this.bcr.top + u.ASS.currentPos;
-      // Include the legacy margin before Document review in this section's
+      // Include the legacy margin before Document flows in this section's
       // progress. A shorter stage must not assemble early inside that gap
       // and then jump backwards when the next section enters.
       this.progressHeight = this._firstScatter && this.el.nextElementSibling
@@ -7158,7 +7452,7 @@ class Sn {
     const after = this.sections[index + 1].getBoundingClientRect();
     const start = before.top + before.height * (documentPhases.formScatterStart % 1);
     const end = after.top + after.height * (documentPhases.stampAssembleStart % 1);
-    // CSS subtracts the neighboring tails and margins from the 200svh budget.
+    // CSS subtracts the neighboring tails and margins from the 300svh budget.
     // Keeping those measurements outside the stage makes this stable on resize.
     stage.style.setProperty("--first-scatter-surrounding-space", `${end - start - current.height}px`);
     u.ASS.resize({ width: u.window.w, height: u.window.h });

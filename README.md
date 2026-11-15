@@ -2,7 +2,7 @@
 
 Preview: https://soularis109.github.io/dala-next/
 
-Pushes to `main` automatically build and deploy the preview through GitHub Actions.
+Pushes to `main` automatically check TypeScript, lint the document animation changes, run the animation tests, then build and deploy the preview through GitHub Actions.
 Use `npm run build:pages` to produce the same static export locally in `out/`.
 The export prefixes legacy asset URLs for GitHub Pages; normal development uses the root URL.
 

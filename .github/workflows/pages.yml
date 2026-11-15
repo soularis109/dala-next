@@ -17,6 +17,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -25,8 +26,30 @@ jobs:
           cache: npm
       - uses: actions/configure-pages@v5
         id: pages
-      - run: npm ci
-      - run: npm run build:pages
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate route types
+        run: npx next typegen
+        env:
+          GITHUB_PAGES: "true"
+          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+      - name: Check TypeScript
+        run: npx tsc --noEmit --incremental false
+      - name: Lint document sections and asset scripts
+        run: >-
+          npx eslint app/components/sections/Landing.tsx app/page.tsx
+          scripts/export-document-v2.mjs scripts/generate-document-particles.mjs
+      - name: Lint animation JavaScript
+        run: >-
+          npx eslint --no-config-lookup
+          --rule 'no-unexpected-multiline:error'
+          --rule 'valid-typeof:error'
+          --rule 'no-unreachable:error'
+          legacy/2601.cjs legacy/document-*.cjs legacy/hero-*.cjs
+      - name: Test animation timelines and interactions
+        run: node --test legacy/*.test.cjs
+      - name: Build static site
+        run: npm run build:pages
         env:
           PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
       - uses: actions/upload-pages-artifact@v4
@@ -36,6 +59,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

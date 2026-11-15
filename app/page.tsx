@@ -30,7 +30,7 @@ export default function Page() {
           <ManifestoIntro />
           <ManifestoBlock
             align="items-end@md"
-            title="Document review"
+            title="Document flows"
             paragraphs={[
               "Your documents move into a structured queue, keeping every file visible as it enters the review process.",
               "Each item follows the same clear route, so nothing is lost between submission, verification and decision.",

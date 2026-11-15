@@ -139,7 +139,7 @@ function resolvedPagePoint(index, random) {
 // left/right halves of the band assemble into the left/right halves of the page.
 // On desktop the simulation stretches this bank's X by `heroBandStretch` (legacy/2601.cjs)
 // so the band spans the full viewport; texture positions must stay inside ±formationRadius.
-// Banks 2 and 3: the same flat document for the stamp ("обробка") state. Same 100x100 grid layout as the resolved page
+// Bank 3: the flat document for the stamp ("обробка") state. Same 100x100 grid layout as the resolved page
 // (so the 40x40 mosaic tiles it) but perfectly flat: no curvature, straight bottom edge, minimal depth jitter.
 function flatPagePoint(index, random) {
   const column = index % bankSize;
@@ -170,6 +170,18 @@ function scatteredPoint(base, random) {
   ];
 }
 
+// Independent seeded lanes survive both the 40x40 and 30x30 visible sub-grids.
+function streamPoint(random) {
+  const lane = Math.floor(random() * 5);
+  const t = random();
+  const direction = lane % 2 === 0 ? 1 : -1;
+  return [
+    direction * (-4.05 + t * 8.1),
+    (lane - 2) * 0.78 + Math.sin(t * Math.PI * 2 + lane * 0.85) * 0.28 + (random() - 0.5) * 0.12,
+    (random() - 0.5) * 0.45,
+  ];
+}
+
 const formations = [[], [], [], []];
 for (let index = 0; index < particleCount; index++) {
   const baseRandom = mulberry32(0xd0c000 + index * 17);
@@ -179,7 +191,7 @@ for (let index = 0; index < particleCount; index++) {
   const flat = flatPagePoint(index, resolvedRandom);
   formations[0].push(scatteredPoint(base, scatterRandom));
   formations[1].push(base);
-  formations[2].push(flat);
+  formations[2].push(streamPoint(mulberry32(0xd0c200 + index * 47)));
   formations[3].push(flat);
 }
 
@@ -286,10 +298,9 @@ for (let target = 0; target < 4; target++) {
     const pixelY = bankY + localY;
     const pixelIndex = (pixelY * size + pixelX) * 3;
     const texturePosition = worldToTexture(formations[target][index]);
-    // Keep both stamp banks identical in position, scale and color.
-    const materialTarget = target === 2 ? 3 : target;
+    const materialTarget = target;
     const random = mulberry32(0xc01000 + materialTarget * 100_003 + index * 73);
-    const scale = target === 0 ? 0.78 + random() * 0.4 : 0.38 + random() * 0.24;
+    const scale = target === 0 ? 0.78 + random() * 0.4 : target === 2 ? 0.42 + random() * 0.26 : 0.38 + random() * 0.24;
     const color = pickPaperColor(materialTarget, formations[target][index], random);
 
     positionPixels.set(texturePosition, pixelIndex);
@@ -715,9 +726,9 @@ writePfm(pfmPath, size, size, positionPixels);
 try {
   // The legacy EXR decoder bundled with the original animation only supports
   // uncompressed scanlines. ZIP-compressed EXR files fail at runtime.
-  execFileSync("ffmpeg", ["-loglevel", "error", "-y", "-i", pfmPath, "-frames:v", "1", exrPath]);
+  execFileSync("ffmpeg", ["-loglevel", "error", "-y", "-i", pfmPath, "-frames:v", "1", "-compression", "none", exrPath]);
 } catch (error) {
-  if (!existsSync(exrPath)) throw new Error("ffmpeg is required to generate document-positions.exr", { cause: error });
+  throw new Error("ffmpeg is required to generate document-positions.exr", { cause: error });
 } finally {
   if (existsSync(pfmPath)) unlinkSync(pfmPath);
 }

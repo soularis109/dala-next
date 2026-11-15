@@ -5,16 +5,18 @@ const { documentTimeline } = require("./document-timeline.cjs");
 test("each formation holds, breaks apart, floats, then resolves into the next", () => {
   for (const mobile of [false, true]) {
     const at = progress => documentTimeline(progress, { mobile });
-    for (const [progress, formation] of [[1.4, 1], [3.8, 3], [4.5, 3]]) {
+    for (const [progress, formation] of [[1.4, 1], [2.75, 2], [2.9, 2], [3.05, 2], [3.8, 3], [4.5, 3]]) {
       assert.equal(at(progress).formation, formation);
       assert.equal(at(progress).explode, 0, `form must hold at ${progress}`);
     }
-    for (const floating of [2.3, 2.6, 2.9, 3.1, 3.3, 3.4]) {
+    for (const [floating, formation] of [[2.3, 1], [2.45, 1], [3.22, 2], [3.3, 2], [3.4, 2]]) {
       assert.equal(at(floating).explode, 1);
-      assert.equal(at(floating).formation, 1, "no intermediate formation before the stamp page");
+      assert.equal(at(floating).formation, formation, "each cloud retains the previous formation until assembly");
       assert.equal(at(floating).x, 0, "free flight stays centered until the stamp page assembles");
     }
-    assert.ok(at(3.52).formation > 1 && at(3.52).formation < 3);
+    assert.ok(at(2.6).formation > 1 && at(2.6).formation < 2);
+    assert.ok(at(2.6).explode > 0 && at(2.6).explode < 1);
+    assert.ok(at(3.52).formation > 2 && at(3.52).formation < 3);
     assert.ok(at(3.52).explode > 0 && at(3.52).explode < 1);
     assert.equal(at(5.2).explode, 1);
     assert.equal(at(5.2).finale, 0, "folder must wait for free flight after the stamp");
@@ -180,5 +182,21 @@ test("mode blending uses the current scroll target and reverses without history"
       assert.deepEqual(documentTimeline(progress, { mobile, finaleMix: 0 }), folder);
       assert.deepEqual(documentTimeline(progress, { mobile, finaleMix: 1 }), page);
     }
+  }
+});
+
+
+test("flight turns hold at whole revolutions and have no positional arc on stable pages", () => {
+  for (const mobile of [false, true]) {
+    for (const [progress, phase] of [[0, 0], [1.4, 1], [2.9, 2], [3.8, 3], [4.5, 3], [6, 4], [7, 4]]) {
+      const state = documentTimeline(progress, { mobile });
+      assert.equal(state.flightPhase, phase);
+      assert.equal(state.flightArc, 0);
+    }
+    for (const progress of [0.5, 2.3, 3.3, 5.2]) {
+      assert.ok(documentTimeline(progress, { mobile }).flightArc > 0);
+    }
+    assert.equal(documentTimeline(3.3, { mobile }).flightStrength, mobile ? 0.5 : 1);
+    assert.equal(documentTimeline(3.3, { mobile, reducedMotion: true }).flightStrength, 0);
   }
 });

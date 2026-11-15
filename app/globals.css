@@ -209,25 +209,48 @@ html[data-anim-only] .header .theme-toggle {
   pointer-events: auto !important;
 }
 
-/* The complete first scatter (1.8 → 3.4) gets two viewports, including the
-   neighboring section tails and the legacy margin before Document review.
+/* Keep the original hero layout inside one scroll section, then give the
+   cloud-to-form transition half a viewport more travel on every breakpoint. */
+.hero-assembly-stage {
+  display: flow-root;
+  margin-top: calc(var(--vh, 1vh) * 20);
+}
+
+.hero-assembly-stage > .landing {
+  margin-top: 0;
+}
+
+.hero-assembly-scroll-space {
+  height: calc(var(--vh, 1vh) * 50);
+  height: 50svh;
+  pointer-events: none;
+}
+
+@media (min-width: 1024px) {
+  .hero-assembly-stage {
+    margin-top: 0;
+  }
+}
+
+/* The complete first scatter (1.8 → 3.4) gets three viewports, including the
+   neighboring section tails and the legacy margin before Document flows.
    The section manager measures that surrounding space on load and resize. */
 .first-scatter-stage {
-  --first-scatter-budget: calc(var(--vh, 1vh) * 200);
+  --first-scatter-budget: calc(var(--vh, 1vh) * 300);
   height: max(1px, calc(var(--first-scatter-budget) - var(--first-scatter-surrounding-space, 0px)));
 }
 
 .first-scatter-stage[data-extra-scatter-screens="true"] {
-  --first-scatter-budget: calc(var(--vh, 1vh) * 400);
+  --first-scatter-budget: calc(var(--vh, 1vh) * 500);
 }
 
 @supports (height: 100svh) {
   .first-scatter-stage {
-    --first-scatter-budget: 200svh;
+    --first-scatter-budget: 300svh;
   }
 
   .first-scatter-stage[data-extra-scatter-screens="true"] {
-    --first-scatter-budget: 400svh;
+    --first-scatter-budget: 500svh;
   }
 }
 
