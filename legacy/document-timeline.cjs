@@ -57,6 +57,9 @@ function documentTimeline(progress, { mobile = false, reducedMotion = false, var
 
   const folderOpen = smooth(progress, 6.2, mobile ? 6.65 : 6.85);
   const standaloneFrame = finale * modeMix;
+  // The standalone page must stop moving when its assembly finishes on mobile.
+  const finaleShift = smooth(progress, 5.7, 6) * (1 - modeMix)
+    + smooth(progress, 5.7, folderEnd) * modeMix;
   const visaApplication = ramp(progress, 6.2, mobile ? 6.65 : 6.85);
   const visaPose = visaStickerPose(visaApplication, reducedMotion);
   return {
@@ -76,7 +79,7 @@ function documentTimeline(progress, { mobile = false, reducedMotion = false, var
     // The automatic stamp's finished imprint fades with the breaking paper.
     stampScatter,
     x: 3.4 * intro - 3.4 * formScatter - 3.2 * stamp
-      + 2.7 * stampScatter - 1.3 * smooth(progress, 5.7, 6) - 1.4 * standaloneFrame,
+      + 2.7 * stampScatter - 1.3 * finaleShift - 1.4 * standaloneFrame,
     tilt: intro * (1 - formScatter),
     stamp,
     finale,
