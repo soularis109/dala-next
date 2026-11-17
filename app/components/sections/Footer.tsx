@@ -1,4 +1,5 @@
 import Logo from "../Logo";
+import { sectionCopyProps } from "../../lib/sectionCopy";
 
 const FOOTER_NAV_ITEMS: { sectionName: string; label: string; anchorLink?: string; href?: string }[] = [
   { sectionName: "manifesto", label: "Manifesto", anchorLink: "manifesto" },
@@ -17,7 +18,7 @@ const SOCIAL_LINKS = [
 export default function Footer() {
   return (
     <div className="section footer | js-section">
-      <div className="footer__head footer__head--visa">
+      <div {...sectionCopyProps} className="footer__head">
         <h2
           className="t-40 t-lh-1 t-48@sm t-lh-1.2@sm t-64@md t-lh-1.1@md -t-ls-0.03 t-400 mb-2"
           animate-from="preset: 'splitTextRotateIn', scrollTrigger: { start: 'top bottom' }"

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { sectionCopyProps } from "../../lib/sectionCopy";
 
 export default function ManifestoBlock({
   align,
@@ -11,6 +12,7 @@ export default function ManifestoBlock({
 }) {
   return (
     <div
+      {...sectionCopyProps}
       className={`section section--tall manifesto manifesto--section ${align} js-section`}
       section-name="manifesto"
     >

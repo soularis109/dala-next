@@ -1,5 +1,3 @@
-import ThemeToggle from "./ThemeToggle";
-
 const NAV_ITEMS: { sectionName: string; label: string; href: string; anchorLink?: string; external?: boolean }[] = [
   { sectionName: "manifesto", label: "Manifesto", href: "/#manifesto", anchorLink: "manifesto" },
   { sectionName: "team", label: "Team", href: "/#team", anchorLink: "team" },
@@ -28,9 +26,6 @@ export default function Nav() {
             </li>
           )
         )}
-        <li className="nav__item nav__theme | js-nav-item">
-          <ThemeToggle />
-        </li>
         <li className="nav__cta | js-nav-item">
           <a
             className="btn t-16 t-14@xs t-16@sm t-ls-0.025 t-600 t-uppercase"

@@ -1,3 +1,5 @@
+import { sectionCopyProps } from "../../lib/sectionCopy";
+
 const PARAGRAPH_PAIRS: [string, string][] = [
   [
     "This is your workplace today. Countless fragments of critical knowledge scattered across hundreds of disparate systems.",
@@ -13,24 +15,15 @@ const PARAGRAPH_PAIRS: [string, string][] = [
   ],
 ];
 
-// Restore the two extra scroll screens once the full page design is ready.
-const SHOW_EXTRA_SCATTER_SCREENS = false;
-
 export default function ManifestoIntro() {
-  const paragraphs = SHOW_EXTRA_SCATTER_SCREENS ? PARAGRAPH_PAIRS : PARAGRAPH_PAIRS.slice(0, 1);
-
   return (
-    <div
-      className="first-scatter-stage js-section"
-      section-name="manifesto"
-      data-extra-scatter-screens={SHOW_EXTRA_SCATTER_SCREENS ? "true" : undefined}
-    >
+    <div {...sectionCopyProps} className="js-section" section-name="manifesto">
       <div
         className="manifesto--introduction-container"
         animate-from="preset: 'splitTextRotateIn', rotate: 7, delay: 0.5, duration: 0.8, scrollTrigger: { start: 'top bottom' }, children: '.js-manifesto-p'"
         animate-mq="smMax"
       >
-        {paragraphs.map((pair, i) => (
+        {PARAGRAPH_PAIRS.map((pair, i) => (
           <div className="section manifesto--introduction" key={i}>
             <div
               className="manifesto__body"

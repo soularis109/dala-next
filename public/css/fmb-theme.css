@@ -1,0 +1,288 @@
+/* FMB theme — loaded after the original layout and animation styles. */
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700&family=Playfair+Display:wght@400;500;600;700&display=swap");
+
+:root {
+  color-scheme: dark;
+  --fmb-navy: #041e42;
+  --fmb-champagne: #d6be93;
+  --fmb-ivory: #f6f2e9;
+  --fmb-black: #000000;
+  --fmb-white: #ffffff;
+  --color-bg: var(--fmb-navy);
+  --color-surface: rgba(4, 30, 66, 0.94);
+  --color-text: var(--fmb-ivory);
+  --color-text-strong: var(--fmb-white);
+  --color-primary: var(--fmb-champagne);
+  --color-accent: var(--fmb-champagne);
+  --color-border: var(--fmb-champagne);
+  --font-heading: "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-body: "Montserrat", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-bold: 700;
+  /* Aliases used by the existing site components. */
+  --canvas: var(--color-bg);
+  --canvas-rgb: 4, 30, 66;
+  --canvas-glass: rgba(var(--canvas-rgb), 0.82);
+  --ink: var(--color-text);
+  --ink-soft: var(--color-text);
+  --line: var(--color-border);
+  --purple: var(--color-primary);
+  --green: var(--fmb-ivory);
+  --yellow: var(--fmb-champagne);
+  --btn-text: var(--fmb-navy);
+  --header-shadow: 0 12px 40px rgba(4, 30, 66, 0.06);
+  --btn-shadow: 0 9px 28px rgba(4, 30, 66, 0.12);
+  --cookie-bg: rgba(4, 30, 66, 0.94);
+  --cookie-shadow: 0 18px 55px rgba(4, 30, 66, 0.12);
+  --color-void: var(--fmb-navy);
+  --color-bone-white: var(--fmb-ivory);
+  --color-ash-gray: var(--fmb-ivory);
+  --color-silver-mist: var(--fmb-champagne);
+  --color-electric-iris: var(--fmb-champagne);
+  --color-saffron-spark: var(--fmb-champagne);
+  --color-deep-verdant: var(--fmb-champagne);
+}
+
+html, body {
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-weight: var(--fw-light);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, .fmb-heading, .site-loader__heading {
+  font-family: var(--font-heading);
+  font-weight: 500 !important;
+  color: var(--fmb-ivory);
+  line-height: 1.15 !important;
+}
+
+.fmb-subheading { font-family: var(--font-body); font-weight: var(--fw-light); }
+strong, b, .fmb-emphasis { font-family: var(--font-body); font-weight: var(--fw-bold); color: var(--color-text-strong); }
+.t-200 { font-weight: var(--fw-light) !important; }
+.t-600 { font-weight: var(--fw-bold) !important; }
+.t-serif { font-family: var(--font-heading) !important; }
+hr, .fmb-divider { border: 0; border-top: 1px solid var(--color-border); }
+
+.on-navy { background: var(--fmb-navy); color: var(--fmb-ivory); }
+.on-navy :is(h1, h2, h3, h4, .fmb-heading) { color: var(--fmb-white); }
+.on-navy :is(strong, b, .fmb-emphasis) { color: var(--fmb-white); }
+.on-ivory { background: var(--fmb-ivory); color: var(--fmb-navy); }
+.on-champagne { background: var(--fmb-champagne); color: var(--fmb-navy); }
+.bg-navy { background-color: var(--fmb-navy); }
+.bg-champagne { background-color: var(--fmb-champagne); }
+.bg-ivory { background-color: var(--fmb-ivory); }
+.bg-black { background-color: var(--fmb-black) !important; }
+.bg-white { background-color: var(--fmb-white) !important; }
+.text-navy { color: var(--fmb-navy); }
+.text-champagne { color: var(--fmb-champagne); }
+.text-ivory { color: var(--fmb-ivory); }
+.text-black { color: var(--fmb-black); }
+.text-white { color: var(--fmb-white); }
+
+.fmb-btn {
+  display: inline-block;
+  padding: 0.75em 1.75em;
+  font-family: var(--font-body);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  border: 1px solid var(--fmb-champagne);
+  background: var(--fmb-champagne);
+  color: var(--fmb-navy);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.fmb-btn--outline { background: transparent; color: var(--fmb-ivory); border-color: var(--fmb-champagne); }
+.fmb-btn:hover, .fmb-btn:focus-visible { background: var(--fmb-ivory); border-color: var(--fmb-ivory); color: var(--fmb-navy); }
+
+html { background: var(--color-bg); }
+
+/* Keep the negative-z canvas inside the body, above the root background. */
+body {
+  isolation: isolate;
+  background: transparent;
+  color: var(--ink);
+}
+
+p {
+  text-shadow: none;
+}
+
+.header-blur-block {
+  background-color: var(--canvas);
+}
+
+.header__logo,
+.footer__logo {
+  color: var(--ink);
+}
+
+.header__logo .js-header-logo-text,
+.footer__logo .js-header-logo-text {
+  fill: currentColor;
+}
+
+.header__bg-inner,
+.nav__bg-inner {
+  background: linear-gradient(180deg, rgba(var(--canvas-rgb), 0.96), var(--canvas-glass));
+  border-bottom: 1px solid var(--line);
+  box-shadow: var(--header-shadow);
+}
+
+.nav__bg {
+  border-bottom-color: var(--line);
+}
+
+.nav__link {
+  color: var(--ink-soft);
+}
+
+.nav__item.isActive .nav__link,
+.nav__link:hover {
+  color: var(--ink);
+}
+
+.btn {
+  background-color: var(--purple);
+  color: var(--btn-text);
+  box-shadow: var(--btn-shadow);
+}
+
+.btn__hover {
+  background: var(--green);
+}
+
+.btn:hover,
+.btn:focus-visible {
+  color: var(--fmb-navy);
+}
+
+.t-yellow {
+  color: var(--yellow) !important;
+}
+
+.t-purple {
+  color: var(--purple) !important;
+}
+
+.t-white {
+  color: var(--ink) !important;
+}
+
+.t-grey-4 {
+  color: var(--ink-soft) !important;
+}
+
+.manifesto--introduction .manifesto__body p {
+  color: var(--ink);
+}
+
+.manifesto__body a,
+.team__body a {
+  color: var(--yellow);
+}
+
+.manifesto__body a::after,
+.team__body a::after {
+  background-color: var(--yellow);
+}
+
+.team-card__social__link,
+.footer__social__link,
+.footer__nav__link,
+.cookie-notice a {
+  color: var(--ink);
+}
+
+.team-card__social__icon,
+.footer__social__icon {
+  fill: var(--ink);
+}
+
+.footer__bar {
+  border-top-color: var(--line);
+}
+
+.footer__nav__link:hover {
+  color: var(--purple);
+}
+
+.footer__copyright {
+  color: var(--ink-soft);
+}
+
+.cookie-notice {
+  background: var(--cookie-bg);
+  border-color: var(--line);
+  box-shadow: var(--cookie-shadow);
+  backdrop-filter: blur(18px);
+}
+
+.asscrollbar__handle > div {
+  background-color: var(--ink);
+}
+
+.site-loader__background,
+.nav-transition-mask-bg {
+  background-color: var(--canvas);
+}
+
+.site-loader__spinner-svg rect,
+.nav-transition-mask__spinner-svg rect {
+  fill: var(--ink);
+}
+
+@media (max-width: 767px) {
+  .nav__bg-inner {
+    background: rgba(var(--canvas-rgb), 0.97);
+  }
+
+  .mobile-blur::after {
+    background: linear-gradient(180deg, rgba(var(--canvas-rgb), 0), rgba(var(--canvas-rgb), 0.92) 20%, rgba(var(--canvas-rgb), 0.92) 80%, rgba(var(--canvas-rgb), 0));
+  }
+}
+
+.nav-toggle {
+  background-color: var(--purple);
+}
+
+.nav-toggle path {
+  stroke: var(--btn-text);
+}
+
+/* Dark FMB controls and readable foregrounds. */
+.manifesto__body a::after, .team__body a::after { background: var(--fmb-champagne); }
+.btn { font-family: var(--font-body); font-weight: var(--fw-bold); border: 1px solid var(--fmb-champagne); }
+.btn:hover, .btn:focus-visible { background: var(--fmb-ivory); border-color: var(--fmb-ivory); color: var(--fmb-navy); }
+.btn__text { z-index: 2; }
+.nav__link, .footer__nav__link { font-weight: var(--fw-bold); }
+.footer__bar { background: var(--canvas-glass); border-top: 1px solid var(--color-border); }
+.value-card { background: var(--color-surface); border-color: var(--color-border); }
+.contact-card__link, .standard-page a { color: var(--ink); }
+.contact-card__icon { fill: var(--ink); }
+.footer__social__link:hover .footer__social__icon,
+.team-card__social__link:hover .team-card__social__icon,
+.contact-card__link:hover .contact-card__icon { fill: var(--fmb-champagne); }
+.team-slider__control-bg { background: var(--fmb-champagne); }
+.team-slider__control-hover { background: var(--fmb-ivory); }
+.team-slider__control svg { color: var(--fmb-navy); fill: currentColor; }
+.team-slider__control:hover svg { fill: var(--fmb-navy); }
+.t-purple-light { color: var(--fmb-champagne) !important; }
+.fill-white { fill: var(--fmb-ivory) !important; }
+.stroke-white { stroke: var(--fmb-ivory) !important; }
+.fill-purple, .fill-green, .fill-yellow { fill: var(--fmb-champagne) !important; }
+.bg-purple { background-color: var(--fmb-champagne) !important; }
+.bg-green, .bg-yellow, .bg-purple-light { background-color: var(--fmb-champagne) !important; }
+:focus-visible { outline: 2px solid var(--fmb-champagne); outline-offset: 4px; }
+
+/* A white raster mark stays visible on the dark surface. */
+.header__logo image, .footer__logo image { filter: brightness(0) invert(1); }
+.nav-toggle:hover { background: var(--fmb-ivory); }
+.nav-toggle:hover path { stroke: var(--fmb-navy); }
+
+.on-ivory :is(h1, h2, h3, h4, strong, b, .fmb-heading, .fmb-emphasis),
+.on-champagne :is(h1, h2, h3, h4, strong, b, .fmb-heading, .fmb-emphasis) { color: var(--fmb-navy); }
+.nav__item.isActive .nav__link, .nav__link:hover { color: var(--fmb-champagne); }

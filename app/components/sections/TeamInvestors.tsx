@@ -1,11 +1,13 @@
 import TeamSlider from "./TeamSlider";
 import Investors from "./Investors";
+import { sectionCopyProps } from "../../lib/sectionCopy";
 
 export default function TeamInvestors() {
   return (
     <div className="section js-section js-team-section mb-1" section-name="team" anchor-target="team">
       <div className="team">
         <div
+          {...sectionCopyProps}
           className="team__head js-team-head"
           animate-mq="sm"
           animate-from="y: '-5vw', scrollTrigger: { scrub: 0.5, once: false, start: 'top bottom' }"
@@ -18,7 +20,7 @@ export default function TeamInvestors() {
           </h2>
         </div>
         <TeamSlider />
-        <div animate-from="y: '-5vw', scrollTrigger: { trigger: '.js-team-head', scrub: 0.5, once: false, start: 'top bottom' }">
+        <div {...sectionCopyProps} animate-from="y: '-5vw', scrollTrigger: { trigger: '.js-team-head', scrub: 0.5, once: false, start: 'top bottom' }">
           <h3
             className="t-36 t-lh-1 -t-ls-0.03 t-400 mt-5@sm"
             animate-from="preset: 'splitTextRotateIn', rotate: 7, delay: 0.5, duration: 0.8, scrollTrigger: { start: 'top bottom' }"

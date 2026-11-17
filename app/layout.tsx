@@ -1,26 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Montserrat, Playfair_Display } from "next/font/google";
-import Script from "next/script";
-import { installHeroPointer } from "../legacy/hero-pointer.cjs";
-import { gtagInit, posthogInit } from "./analytics";
 import "./globals.css";
 
-const playfair = Playfair_Display({
-  subsets: ["latin"],
-  variable: "--font-playfair",
-  display: "swap",
-});
-
-const montserrat = Montserrat({
-  subsets: ["latin"],
-  weight: ["300", "700"],
-  variable: "--font-montserrat",
-  display: "swap",
-});
 
 const desc = "Your workplace has the answer. Just ask Dala for it.";
 const ogAlt =
-  'The Dala logo above the headline "Unlock collective wisdom", with a large 3D document assembled from thousands of small paper documents.';
+  'The Dala logo above the headline "Unlock collective wisdom", sitting on top of a 3D brain composed of many small pyramidal particles.';
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://dala.ai"),
@@ -35,7 +19,7 @@ export const metadata: Metadata = {
     ],
     shortcut: "/images/favicons/favicon.ico",
     apple: { url: "/images/favicons/apple-touch-icon.png", sizes: "180x180" },
-    other: [{ rel: "mask-icon", url: "/images/favicons/safari-pinned-tab.svg", color: "#5bbad5" }],
+    other: [{ rel: "mask-icon", url: "/images/favicons/safari-pinned-tab.svg", color: "#041e42" }],
   },
   openGraph: {
     title: "Dala",
@@ -53,7 +37,7 @@ export const metadata: Metadata = {
     images: [{ url: "https://dala.ai/images/twitter-og.jpg", alt: ogAlt }],
   },
   other: {
-    "msapplication-TileColor": "#F6F2E9",
+    "msapplication-TileColor": "#041e42",
     "msapplication-config": "/images/favicons/browserconfig.xml",
   },
 };
@@ -62,34 +46,22 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   userScalable: true,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#F6F2E9" },
-    { media: "(prefers-color-scheme: dark)", color: "#0B1220" },
-  ],
+  themeColor: "#041e42",
 };
 
-// Capture real hover coordinates while the animation bundle is still loading.
-const heroPointerInit = `(${installHeroPointer.toString()})(window);`;
 
-// Set theme and animation-only mode before first paint.
-const themeInit = `(function(){try{var t=localStorage.getItem('theme');if(t!=='dark'&&t!=='light'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.setAttribute('data-theme',t)}catch(e){}try{if(!/[?&]text(=|&|$)/.test(location.search))document.documentElement.setAttribute('data-anim-only','')}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${playfair.variable} ${montserrat.variable}`} suppressHydrationWarning>
+    <html lang="en" data-theme="dark">
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
         {/* eslint-disable-next-line @next/next/no-css-tags */}
         <link rel="stylesheet" href="/css/style.css" />
         {/* eslint-disable-next-line @next/next/no-css-tags */}
-        <link rel="stylesheet" href="/css/light-theme.css" />
+        <link rel="stylesheet" href="/css/fmb-theme.css" />
       </head>
-      <body className="bg-background font-montserrat font-light text-primary antialiased">
-        <Script id="hero-pointer-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: heroPointerInit }} />
+      <body>
         {children}
-        <Script id="gtag-init" strategy="afterInteractive" dangerouslySetInnerHTML={{ __html: gtagInit }} />
-        <Script src="https://www.googletagmanager.com/gtag/js?id=G-L5SSFERMSM" strategy="afterInteractive" />
-        <Script id="posthog-init" strategy="afterInteractive" dangerouslySetInnerHTML={{ __html: posthogInit }} />
       </body>
     </html>
   );

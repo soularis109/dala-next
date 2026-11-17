@@ -1,6 +1,5 @@
 import Logo from "./Logo";
 import Nav from "./Nav";
-import ThemeToggle from "./ThemeToggle";
 
 export default function Header() {
   return (
@@ -12,8 +11,7 @@ export default function Header() {
         <button className="header__logo | js-header-logo" anchor-link="landing">
           <Logo /> <span className="sr">Dala</span>
         </button>
-        <div className="header__cta mr-4 d-flex" style={{ alignItems: "center", gap: "0.75rem" }}>
-          <ThemeToggle />
+        <div className="header__cta mr-4">
           <a
             className="btn t-16 t-14@xs t-16@sm t-ls-0.025 t-600 t-uppercase"
             aria-label="Request Access"

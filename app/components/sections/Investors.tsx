@@ -1,4 +1,5 @@
 import { INVESTORS } from "../../data/investors";
+import { sectionCopyProps } from "../../lib/sectionCopy";
 
 export default function Investors() {
   return (
@@ -19,7 +20,7 @@ export default function Investors() {
               start-x={investor.startX}
               parallax-speed={investor.parallaxSpeed}
             ></div>
-            <div className="investor__body">
+            <div {...sectionCopyProps} className="investor__body">
               <div className="t-32 t-lh-1.25 -t-ls-0.03 t-400">{investor.name}</div>
               {investor.title && <div className="t-16 t-lh-1.3 -t-ls-0.02 t-400 t-grey-4">{investor.title}</div>}
             </div>
@@ -27,6 +28,7 @@ export default function Investors() {
         </div>
       ))}
       <div
+        {...sectionCopyProps}
         className="investors__text"
         animate-from="y: '2vw', scrollTrigger: { trigger: '.js-team-head', scrub: 0.5, once: false, start: 'top bottom' }"
       >
