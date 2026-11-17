@@ -11,6 +11,7 @@ import ManifestoBlock from "./components/sections/ManifestoBlock";
 import TeamInvestors from "./components/sections/TeamInvestors";
 import Footer from "./components/sections/Footer";
 import ScriptLoader from "./ScriptLoader";
+import DocumentStamp from "./components/DocumentStamp";
 
 export default function Page() {
   return (
@@ -26,15 +27,6 @@ export default function Page() {
           <Landing />
           <Introduction />
           <ManifestoIntro />
-          <ManifestoBlock
-            align="items-end@md"
-            title="Spark lightbulb moments"
-            paragraphs={[
-              "Dala is your intelligent, real-time source of truth that eliminates the cultural, financial and operational struggles of splintered tools.",
-              "We connect your systems behind the scenes and pull together exactly the knowledge you require into an elegant contextual view.",
-              "Just ask Dala for the answer that advances your work, and helps you make better decisions with more confidence.",
-            ]}
-          />
           <ManifestoBlock
             align="items-start@md"
             title="Build a better world of work"
@@ -52,6 +44,15 @@ export default function Page() {
               "We want to recreate that every time you experience Dala. A tool that is completely integrated with how you think, feel and work.",
             ]}
           />
+          <ManifestoBlock
+            align="items-end@md"
+            title="Spark lightbulb moments"
+            paragraphs={[
+              "Dala is your intelligent, real-time source of truth that eliminates the cultural, financial and operational struggles of splintered tools.",
+              "We connect your systems behind the scenes and pull together exactly the knowledge you require into an elegant contextual view.",
+              "Just ask Dala for the answer that advances your work, and helps you make better decisions with more confidence.",
+            ]}
+          />
           <TeamInvestors />
           <Footer />
           <div style={{ position: "absolute", left: 0, bottom: "-1px", width: "2px", height: "2px" }}></div>
@@ -60,6 +61,7 @@ export default function Page() {
       <div className="fixed fill w-1/1 h-1/1 z-negative user-select-none pointer-events-none">
         <canvas id="canvas" />
       </div>
+      <DocumentStamp />
       <ScriptLoader />
     </>
   );
