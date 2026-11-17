@@ -3,7 +3,15 @@
 /* Preserve section geometry for scroll choreography. Descendants must stay
    hidden even when GSAP writes inline visibility or pointer-event styles. */
 [data-section-copy-hidden="true"],
-[data-section-copy-hidden="true"] * {
+[data-section-copy-hidden="true"] *,
+[data-team-slider-hidden="true"],
+[data-team-slider-hidden="true"] * {
   visibility: hidden !important;
   pointer-events: none !important;
+}
+
+.investor__icon__image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }

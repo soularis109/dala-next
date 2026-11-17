@@ -5,16 +5,19 @@ export default function ManifestoBlock({
   align,
   title,
   paragraphs,
+  streamStage = false,
 }: {
   align: "items-end@md" | "items-start@md";
   title: string;
   paragraphs: ReactNode[];
+  streamStage?: boolean;
 }) {
   return (
     <div
       {...sectionCopyProps}
       className={`section section--tall manifesto manifesto--section ${align} js-section`}
       section-name="manifesto"
+      data-stream-stage={streamStage ? "" : undefined}
     >
       <div className="manifesto__inner mobile-blur">
         <h2

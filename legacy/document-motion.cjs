@@ -16,6 +16,43 @@ function idlePose(time, weight) {
   };
 }
 
+const streamsMotion = Object.freeze({
+  tiltX: 6 * Math.PI / 180,
+  tiltY: 5 * Math.PI / 180,
+  x: 1.5, y: 4,
+  swayX: 0.4 * Math.PI / 180,
+  swayY: 0.6 * Math.PI / 180
+});
+
+// Aim the formation normal along the ray back to the camera. Basis is the
+// unrotated mesh's model-view matrix; transpose its rotation into local space.
+function streamsFacing(projectionX, projectionY, centerX = 0.75, centerY = 0.5, basis) {
+  const x = -(2 * centerX - 1) / projectionX;
+  const y = -(1 - 2 * centerY) / projectionY;
+  const nx = basis ? basis[0] * x + basis[1] * y + basis[2] : x;
+  const ny = basis ? basis[4] * x + basis[5] * y + basis[6] : y;
+  const nz = basis ? basis[8] * x + basis[9] * y + basis[10] : 1;
+  // Shader rotations correspond to Rx(-rx) * Ry(-ry).
+  return { rx: Math.atan2(ny, nz), ry: -Math.atan2(nx, Math.hypot(ny, nz)) };
+}
+
+// Shared frame clock, no accumulating offsets or restart on scene entry.
+// Passing idle=0 gives the base pose used for fitting, independent of time.
+function streamsPose(time, tilt, idle, narrow = false, facing = { rx: 0, ry: 0 }) {
+  const strength = narrow ? 0.5 : 1;
+  const rx = (facing.rx + streamsMotion.tiltX * strength) * tilt;
+  const ry = (facing.ry + streamsMotion.tiltY * strength) * tilt;
+  if (idle === 0) return { x: 0, y: 0, rx, ry, rz: 0 };
+  const phase = time * Math.PI * 2;
+  return {
+    x: Math.sin(phase / 8) * streamsMotion.x * idle * strength,
+    y: Math.sin(phase / 6) * streamsMotion.y * idle * strength,
+    rx: rx + Math.sin(phase / 8) * streamsMotion.swayX * idle * strength,
+    ry: ry + Math.sin(phase / 10) * streamsMotion.swayY * idle * strength,
+    rz: 0
+  };
+}
+
 // Stateless sticker application: the input is scroll progress, never elapsed time.
 function visaStickerPose(progress, reducedMotion = false) {
   const t = Math.min(1, Math.max(0, progress));
@@ -72,4 +109,4 @@ function cursorImpulse(index, px, py, segment, dt, tune) {
     tilt: (index % 2 ? -1 : 1) * Math.PI / 12 * weight };
 }
 
-module.exports = { smooth, idlePose, visaStickerPose, stepScatterCell, cursorImpulse };
+module.exports = { smooth, idlePose, streamsMotion, streamsFacing, streamsPose, visaStickerPose, stepScatterCell, cursorImpulse };

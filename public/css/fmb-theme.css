@@ -125,7 +125,14 @@ p {
   fill: currentColor;
 }
 
-.header__bg-inner,
+.header__bg-inner {
+  background: rgba(var(--canvas-rgb), 0.2);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border-bottom: 0;
+  box-shadow: none;
+}
+
 .nav__bg-inner {
   background: linear-gradient(180deg, rgba(var(--canvas-rgb), 0.96), var(--canvas-glass));
   border-bottom: 1px solid var(--line);

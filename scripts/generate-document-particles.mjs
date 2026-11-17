@@ -1,3 +1,6 @@
+import streamMotion from "../legacy/document-stream-motion.cjs";
+const { mulberry32, streamPoint } = streamMotion;
+
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -14,15 +17,6 @@ const formationRadius = 4.35;
 
 mkdirSync(imagesDir, { recursive: true });
 mkdirSync(modelsDir, { recursive: true });
-
-function mulberry32(seed) {
-  return function random() {
-    let value = (seed += 0x6d2b79f5);
-    value = Math.imul(value ^ (value >>> 15), value | 1);
-    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
-    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -167,18 +161,6 @@ function scatteredPoint(base, random) {
     clamp((u - 0.5) * 8.3, -4.15, 4.15),
     clamp(wave + thickness, -3.4, 3.4),
     clamp((random() - 0.5) * 1.1 + Math.sin(u * Math.PI * 3.1) * 0.18, -1.2, 1.2),
-  ];
-}
-
-// Independent seeded lanes survive both the 40x40 and 30x30 visible sub-grids.
-function streamPoint(random) {
-  const lane = Math.floor(random() * 5);
-  const t = random();
-  const direction = lane % 2 === 0 ? 1 : -1;
-  return [
-    direction * (-4.05 + t * 8.1),
-    (lane - 2) * 0.78 + Math.sin(t * Math.PI * 2 + lane * 0.85) * 0.28 + (random() - 0.5) * 0.12,
-    (random() - 0.5) * 0.45,
   ];
 }
 

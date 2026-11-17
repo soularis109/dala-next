@@ -1,6 +1,27 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { documentTimeline } = require("./document-timeline.cjs");
+const { documentPhases, documentTimeline, documentFlightArc, stepDocumentProgress } = require("./document-timeline.cjs");
+
+test("stream tilt assembles, holds and releases; floating enters only at the end of assembly", () => {
+  for (const progress of [0, 1.4, 2.3, 2.45, 3.22, 3.4, 4, 6, 7]) {
+    const state = documentTimeline(progress);
+    assert.equal(state.streamsTilt, 0);
+    assert.equal(state.streamsIdle, 0);
+  }
+  assert.ok(documentTimeline(2.6).streamsTilt > 0 && documentTimeline(2.6).streamsTilt < 1);
+  assert.equal(documentTimeline(2.69).streamsIdle, 0);
+  assert.ok(documentTimeline(2.74).streamsIdle > 0 && documentTimeline(2.74).streamsIdle < 1);
+  for (const progress of [2.75, 2.9, 3.05]) {
+    assert.equal(documentTimeline(progress).streamsTilt, 1);
+    assert.equal(documentTimeline(progress).streamsIdle, 1);
+  }
+  assert.ok(documentTimeline(3.1).streamsIdle > 0 && documentTimeline(3.1).streamsIdle < 1);
+  for (const mobile of [false, true]) for (const progress of [2.6, 2.74, 2.9, 3.1]) {
+    const state = documentTimeline(progress, { mobile, reducedMotion: true });
+    assert.equal(state.streamsTilt, 0);
+    assert.equal(state.streamsIdle, 0);
+  }
+});
 
 test("each formation holds, breaks apart, floats, then resolves into the next", () => {
   for (const mobile of [false, true]) {
@@ -199,4 +220,50 @@ test("flight turns hold at whole revolutions and have no positional arc on stabl
     assert.equal(documentTimeline(3.3, { mobile }).flightStrength, mobile ? 0.5 : 1);
     assert.equal(documentTimeline(3.3, { mobile, reducedMotion: true }).flightStrength, 0);
   }
+});
+
+test("flight arcs follow the rendered turn on fast jumps and reversals", () => {
+  // These phases can be reached while easing across several scenes at once.
+  // An independently eased arc used to remain nonzero at a whole revolution.
+  for (const phase of [0, 1, 2, 3, 4]) assert.equal(documentFlightArc(phase), 0);
+  for (const phase of [0.25, 1.25, 2.25, 3.25]) {
+    assert.ok(Math.abs(documentFlightArc(phase) - 0.5) < 1e-12);
+    assert.equal(documentFlightArc(phase), documentFlightArc(phase + 1));
+  }
+  const phases = [0, 0.1, 0.5, 0.9, 1, 2.5, 3, 3.9, 4];
+  const forward = phases.map(documentFlightArc);
+  assert.deepEqual(phases.toReversed().map(documentFlightArc), forward.toReversed());
+});
+
+test("finale collection and opening retain their separate desktop/mobile holds", () => {
+  for (const mobile of [false, true]) {
+    const end = mobile ? documentPhases.finaleAssembleEndMobile : documentPhases.finaleAssembleEnd;
+    const openEnd = mobile ? documentPhases.folderOpenEndMobile : documentPhases.folderOpenEnd;
+    for (const finaleMode of ["folder", "document"]) {
+      const at = progress => documentTimeline(progress, { mobile, finaleMode });
+      assert.equal(at(documentPhases.finaleAssembleStart).finale, 0);
+      assert.equal(at(end).finale, 1);
+      for (const progress of [end, (end + documentPhases.folderOpenStart) / 2, documentPhases.folderOpenStart]) {
+        assert.equal(at(progress).folderOpen, 0);
+        assert.equal(at(progress).flightArc, 0);
+      }
+      assert.equal(at(openEnd).folderOpen, 1);
+      assert.equal(at(openEnd).visaApplication, 1);
+    }
+  }
+});
+
+
+test("one eased scroll sample keeps all document phases synchronized on jumps and reversal", () => {
+  let visual = 0;
+  for (const target of [1.4, 2.3, 2.9, 3.3, 3.9, 2.9, 2.3, 1.4, 3.9, 6.9, 0]) {
+    const before = visual;
+    visual = stepDocumentProgress(visual, target);
+    assert.ok(visual >= Math.min(before, target) && visual <= Math.max(before, target));
+    for (let frame = 0; frame < 180; frame++) visual = stepDocumentProgress(visual, target);
+    assert.equal(visual, target);
+    assert.deepEqual(documentTimeline(visual), documentTimeline(target));
+  }
+  assert.equal(stepDocumentProgress(1, 2, 1), 2);
+  assert.equal(stepDocumentProgress(2, 1, 1), 1);
 });

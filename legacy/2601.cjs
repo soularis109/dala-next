@@ -634,6 +634,7 @@ class O {
     u.window.w = window.innerWidth;
     u.window.h = window.innerHeight;
     u.html.style.setProperty("--vh", `${u.window.h * 0.01}px`);
+    streamScroll.prepareSections(document.querySelectorAll("[data-stream-stage]"));
     F.emit(O.RESIZE, e);
   }
   static handleRaf(e) {
@@ -2309,7 +2310,7 @@ function it(e, t = document) {
 var rt = e => Math.cos(e * (Math.PI / 2)) * -1 + 1;
 var ot = e => (Math.cos(Math.PI * e) - 1) * -0.5;
 var st = {
-  Pyramid: class extends $e {
+  InvestorDocument: class extends $e {
     constructor(e) {
       var t;
       var n;
@@ -2365,7 +2366,9 @@ var st = {
       this.material = new Be.v({
         color: Number(this.color)
       });
-      this.item = u.WebGL.assets.models.piramed_thinner.scene.children[0].clone();
+      this.material.extensions = { ...this.material.extensions, derivatives: true };
+      this.material.onBeforeCompile = addDocumentParticleMarkings;
+      this.item = u.WebGL.assets.models.piramed.scene.children[0].clone();
       this.item.material = this.material;
       this.item.rotation.set(ge.Qy(ge.Id(0), ge.Id(45)), ge.Qy(ge.Id(0), ge.Id(45)), ge.Qy(ge.Id(0), ge.Id(45)));
       this.animPos = {
@@ -3415,14 +3418,26 @@ var Mt = require("./2114.cjs");
 var Ot = {
   images: [],
   textures: [{
+    id: "visa_mark",
+    url: "/images/visa-mark.png"
+  }, {
+    id: "visa_body",
+    url: "/images/visa-body.png"
+  }, {
+    id: "stamp_body_top",
+    url: "/images/stamp-body-top.png"
+  }, {
+    id: "stamp_mark",
+    url: "/images/stamp-mark.png"
+  }, {
     id: "cone_scale",
-    url: "/images/sc-33.png"
+    url: "/images/hero-document-scales.png"
   }, {
     id: "cone_color",
-    url: "/images/cd-33.png"
+    url: "/images/hero-document-colors.png"
   }, {
     id: "cone_position_exr",
-    url: "/images/pos-33.exr"
+    url: "/images/hero-document-positions.exr"
   }, {
     id: "sprite",
     url: "/images/dof-2k-10.jpg"
@@ -3912,11 +3927,18 @@ class Jt extends Re.T {
   }
 }
 var en = "#define GLSLIFY 1\nmat4 rotationMatrix(vec3 axis, float angle)\n{\n    axis = normalize(axis);\n    float s = sin(angle);\n    float c = cos(angle);\n    float oc = 1.0 - c;\n    \n    return mat4(oc * axis.x * axis.x + c,           oc * axis.x * axis.y - axis.z * s,  oc * axis.z * axis.x + axis.y * s,  0.0,\n                oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c,           oc * axis.y * axis.z - axis.x * s,  0.0,\n                oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c,           0.0,\n                0.0,                                0.0,                                0.0,                                1.0);\n}\n\nmat3 calcLookAtMatrix(vec3 origin, vec3 target, float roll) {\n  vec3 rr = vec3(sin(roll), cos(roll), 0.0);\n  vec3 ww = normalize(target - origin);\n  vec3 uu = normalize(cross(ww, rr));\n  vec3 vv = normalize(cross(uu, ww));\n\n  return mat3(uu, vv, ww);\n}\n";
-var tn = "#define GLSLIFY 1\n// mat4 rotMat = rotationMatrix(vec3(0., 0., a_angle.z), a_angle.w);\nvec4 mvPosition = vec4( transformed, 1.0 );\n\n// // Show Animation -----\n// float d = 0.00005;\n// float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * a_order));\n// showVal = qinticInOut(showVal);\n// float radius = mix(u_factor + a_random.x * 3., u_factor, showVal) + u_explode * a_random.y;\n\nvec3 pos = texture2D(t_position, a_id).xyz;\nvec3 basePos = pos;\n\n// pos.x = (pos.x - 0.5) * 2. * radius;\n// pos.y = (pos.y - 0.5) * 2. * radius;\n// pos.z = (pos.z - 0.5) * 2. * radius;\n\n// vec3 pos2 = texture2D(t_position, vec2(a_id.x + 0.5, a_id.y)).xyz;\n// pos2.x = (pos2.x - 0.5) * 2. * radius;\n// pos2.y = (pos2.y - 0.5) * 2. * radius;\n// pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n// vec3 pos3 = texture2D(t_position, vec2(a_id.x, a_id.y + 0.5)).xyz;\n// pos3.x = (pos3.x - 0.5) * 2. * radius;\n// pos3.y = (pos3.y - 0.5) * 2. * radius;\n// pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n// vec3 pos4 = texture2D(t_position, vec2(a_id.x + 0.5, a_id.y + 0.5)).xyz;\n// pos4.x = (pos4.x - 0.5) * 2. * radius;\n// pos4.y = (pos4.y - 0.5) * 2. * radius;\n// pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n// pos = mix(pos, pos2, u_progress);\n// pos = mix(pos, pos3, max(0., u_progress - 1.));\n// pos = mix(pos, pos4, max(0., u_progress - 2.));\n\npos = texture2D(t_simulation, vec2(a_id.x * 2., a_id.y * 2.)).xyz;\n// vec3 basePos = pos;\n\n// Mouse Animation -----\nvec4 mPos = vec4(pos, 1.);\nmPos *= rotationMatrix(vec3(1., 0., 0.), u_rotation.x * -1.);\nmPos *= rotationMatrix(vec3(0., 1., 0.), u_rotation.y * -1.);\nmPos *= rotationMatrix(vec3(0., 0., 1.), u_rotation.z * -1.);\nmPos.y -= 1.;\nmPos.x += u_offset.x;\nmPos.y += u_offset.y;\nvec2 resolution = mix(\n  u_resolution - u_resolution * 0.5,\n  u_resolution2 - u_resolution2 * 0.5,\n  min(1., max(0., u_progress2))\n);\nvec2 m = u_mouse * vec2(1., 1.);\nfloat dist = smoothstep( 1.25 + abs(max(u_delta.x, u_delta.y)), 0., distance(mPos.xy, m * resolution)); \npos.x += dist * sin(u_time * a_random.y) * (a_random.z*0.35 + u_delta.x) * abs( u_explode - 1.);\npos.y += dist * cos(u_time * a_random.y) * (a_random.z* 0.35 + u_delta.y) * abs( u_explode - 1.);\n\n// pos.x += m.x * 0.05;\n// pos.y += m.y * 0.05;\n\n// Offset Position -----\n// pos += u_offset;\n\n// Mouse Animation -----\n// vec4 fake_frag_coord  = mvPosition * vec4(pos, 1.);\n// fake_frag_coord.xyz /= fake_frag_coord.w;\n// fake_frag_coord.w = 1.0 / fake_frag_coord.w;\n// fake_frag_coord.xyz *= vec3 (0.5) + vec3 (0.5);\n// fake_frag_coord.xy  *= u_resolution.xy * 0.5; \n// fake_frag_coord.xy  *= vec2(-1., 1.); \n\n// // Mouse Animation -----\n// vec4 mPos = vec4(pos.xy, 1., 1.);\n// mPos.y -= 1.;\n// mPos.xy += u_offset.xy;\n// // mPos *= rotationMatrix(vec3(1., 0., 0.), u_rotation.x);\n// // mPos *= rotationMatrix(vec3(0., 1., 0.), u_rotation.y);\n// // mPos *= rotationMatrix(vec3(0., 0., 1.), u_rotation.z);\n// vec4 tFluid = texture2D( t_fluid, (mPos.xy + u_resolution * 0.5) / u_resolution );\n// // pos.x += tFluid.r * 0.025;\n// // pos.x -= tFluid.b * 0.025;\n// pos.z -= tFluid.r * 0.01;\n\n// vec2 resolution = u_resolution * 0.5;\n// vec2 m = resolution * u_mouse * vec2(1., 1.);\n// float dist = smoothstep(2., 0., distance(pos.xy + u_offset.xy, m));\n// pos *= max(1., 1. + dist * 0.1 + dist * abs(sin(basePos.y * 120. + u_time * 0.5)) * 0.1);\n\nfloat n = snoise(pos * u_amplitude);\n// float n2 = snoise(pos * u_amplitude2 + u_time * 0.2);\nmat4 rotMat = rotationMatrix(vec3(1., 0., 1.), n);\n// mat4 rotMat2 = rotationMatrix(vec3(0., 1., 0.), mod(u_time * a_random.x * 2., 3.1416 * 2.));\nmat4 rotMat2 = rotationMatrix(vec3(0., 1., 1.), mod(n + u_time, 3.1416 * 2.));\n\nfloat scale = texture2D(t_scale, a_id).x * u_scale;\nfloat scale2 = texture2D(t_scale, vec2(a_id.x + 0.5, a_id.y)).x * u_scale;\nfloat scale3 = texture2D(t_scale, vec2(a_id.x, a_id.y + 0.5)).x * u_scale;\nfloat scale4 = texture2D(t_scale, vec2(a_id.x + 0.5, a_id.y + 0.5)).x * u_scale;\nscale = mix(scale, scale2, u_progress);\nscale = mix(scale, scale3, max(0., u_progress - 1.));\nscale = mix(scale, scale4, max(0., u_progress - 2.));\n\nscale += dist * 0.75 * abs( u_explode - 1.);\n\n#ifdef USE_INSTANCING\n  mat4 instanceMat = instanceMatrix;\n\n  instanceMat[3][0] = instanceMat[3][0] + pos.x;\n  instanceMat[3][1] = instanceMat[3][1] + pos.y;\n  instanceMat[3][2] = instanceMat[3][2] + pos.z;\n\n  mat4 rotMat3 = mat4(calcLookAtMatrix(vec3(instanceMat[3][0] + u_offset.x, instanceMat[3][1] + u_offset.y, instanceMat[3][2]), cameraPosition, 0.));\n\n  // instanceMat[0][0] = instanceMat[0][0] * smoothstep(0., 1., scale);\n  // instanceMat[1][1] = instanceMat[1][1] * smoothstep(0., 1., scale);\n  // instanceMat[2][2] = instanceMat[2][2] * smoothstep(0., 1., scale);\n\n  instanceMat[0][0] = instanceMat[0][0] * scale;\n  instanceMat[1][1] = instanceMat[1][1] * scale;\n  instanceMat[2][2] = instanceMat[2][2] * scale;\n\n  // instanceMat *= rotMat;\n  if (u_mobileRotation > 0.) {\n    instanceMat *= rotMat3;\n  } else {\n    instanceMat *= rotMat2;\n  }\n\n\tmvPosition = instanceMat * mvPosition;\n  // mvPosition.xyz += u_offset;\n#endif\n\n// Offset Position -----\nmat4 modViewMatrix = modelViewMatrix;\nmodViewMatrix[3][0] += u_offset.x;\nmodViewMatrix[3][1] += u_offset.y;\nmodViewMatrix *= rotationMatrix(vec3(1., 0., 0.), u_rotation.x);\nmodViewMatrix *= rotationMatrix(vec3(0., 1., 0.), u_rotation.y);\nmodViewMatrix *= rotationMatrix(vec3(0., 0., 1.), u_rotation.z);\n\nmvPosition = modViewMatrix * mvPosition;\n\n// mat4 testMatrix = modelMatrix;\n// testMatrix[3][0] += u_offset.x;\n// testMatrix *= rotationMatrix(vec3(0., 1., 0.), u_rotation);\n\n// mvPosition2 = testMatrix * mvPosition2;\n\nv_pos = mvPosition.xyz;\nv_pos.z += 10.;\n\n// // Mouse Animation -----\n// vec2 resolution = u_resolution * 0.5;\n// vec2 m = u_mouse * vec2(1., 1.);\n// // float dist = smoothstep(.1, 0., distance(mvPosition.xy / resolution, m));\n// float dist = step(distance(mvPosition.xy / resolution, m), .1);\n// mvPosition.x += dist * sin(u_time * a_random.y) * a_random.z;\n// mvPosition.y += dist * cos(u_time * a_random.y) * a_random.z;\n// // mvPosition.z += dist * cos(u_time * a_random.y) * a_random.z;\n// // mvPosition.z += dist * abs(sin(basePos.y * 120. + u_time * 0.5)) * 1.5;\n\n// vec4 tFluid = texture2D( t_fluid, (mvPosition.xy + vec2(1.) ) * 0.5);\n// mvPosition.x += tFluid.r * 0.01;\n// mvPosition.x -= tFluid.b * 0.01;\n// pos.y += tFluid.g * 0.01;\n// mvPosition.z += tFluid.r * 0.05;\n\ngl_Position = projectionMatrix * mvPosition;\n\nv_id = a_id;\nv_hover = dist;";
+var tn = "#define GLSLIFY 1\n// mat4 rotMat = rotationMatrix(vec3(0., 0., a_angle.z), a_angle.w);\nvec4 mvPosition = vec4( transformed, 1.0 );\n\n// // Show Animation -----\n// float d = 0.00005;\n// float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * a_order));\n// showVal = qinticInOut(showVal);\n// float radius = mix(u_factor + a_random.x * 3., u_factor, showVal) + u_explode * a_random.y;\n\nvec3 pos = texture2D(t_position, a_id).xyz;\nvec3 basePos = pos;\n\n// pos.x = (pos.x - 0.5) * 2. * radius;\n// pos.y = (pos.y - 0.5) * 2. * radius;\n// pos.z = (pos.z - 0.5) * 2. * radius;\n\n// vec3 pos2 = texture2D(t_position, vec2(a_id.x + 0.5, a_id.y)).xyz;\n// pos2.x = (pos2.x - 0.5) * 2. * radius;\n// pos2.y = (pos2.y - 0.5) * 2. * radius;\n// pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n// vec3 pos3 = texture2D(t_position, vec2(a_id.x, a_id.y + 0.5)).xyz;\n// pos3.x = (pos3.x - 0.5) * 2. * radius;\n// pos3.y = (pos3.y - 0.5) * 2. * radius;\n// pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n// vec3 pos4 = texture2D(t_position, vec2(a_id.x + 0.5, a_id.y + 0.5)).xyz;\n// pos4.x = (pos4.x - 0.5) * 2. * radius;\n// pos4.y = (pos4.y - 0.5) * 2. * radius;\n// pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n// pos = mix(pos, pos2, u_progress);\n// pos = mix(pos, pos3, max(0., u_progress - 1.));\n// pos = mix(pos, pos4, max(0., u_progress - 2.));\n\npos = texture2D(t_simulation, vec2(a_id.x * 2., a_id.y * 2.)).xyz;\n// vec3 basePos = pos;\n\n// Mouse Animation -----\nvec4 mPos = vec4(pos, 1.);\nmPos *= rotationMatrix(vec3(1., 0., 0.), u_rotation.x * -1.);\nmPos *= rotationMatrix(vec3(0., 1., 0.), u_rotation.y * -1.);\nmPos *= rotationMatrix(vec3(0., 0., 1.), u_rotation.z * -1.);\nmPos.y -= 1.;\nmPos.x += u_offset.x;\nmPos.y += u_offset.y;\nvec2 resolution = mix(\n  u_resolution - u_resolution * 0.5,\n  u_resolution2 - u_resolution2 * 0.5,\n  min(1., max(0., u_progress2))\n);\nvec2 m = u_mouse * vec2(1., 1.);\nfloat dist = smoothstep( 1.25 + abs(max(u_delta.x, u_delta.y)), 0., distance(mPos.xy, m * resolution)); \npos.x += dist * sin(u_time * a_random.y) * (a_random.z*0.35 + u_delta.x) * abs( u_explode - 1.);\npos.y += dist * cos(u_time * a_random.y) * (a_random.z* 0.35 + u_delta.y) * abs( u_explode - 1.);\n\n// pos.x += m.x * 0.05;\n// pos.y += m.y * 0.05;\n\n// Offset Position -----\n// pos += u_offset;\n\n// Mouse Animation -----\n// vec4 fake_frag_coord  = mvPosition * vec4(pos, 1.);\n// fake_frag_coord.xyz /= fake_frag_coord.w;\n// fake_frag_coord.w = 1.0 / fake_frag_coord.w;\n// fake_frag_coord.xyz *= vec3 (0.5) + vec3 (0.5);\n// fake_frag_coord.xy  *= u_resolution.xy * 0.5; \n// fake_frag_coord.xy  *= vec2(-1., 1.); \n\n// // Mouse Animation -----\n// vec4 mPos = vec4(pos.xy, 1., 1.);\n// mPos.y -= 1.;\n// mPos.xy += u_offset.xy;\n// // mPos *= rotationMatrix(vec3(1., 0., 0.), u_rotation.x);\n// // mPos *= rotationMatrix(vec3(0., 1., 0.), u_rotation.y);\n// // mPos *= rotationMatrix(vec3(0., 0., 1.), u_rotation.z);\n// vec4 tFluid = texture2D( t_fluid, (mPos.xy + u_resolution * 0.5) / u_resolution );\n// // pos.x += tFluid.r * 0.025;\n// // pos.x -= tFluid.b * 0.025;\n// pos.z -= tFluid.r * 0.01;\n\n// vec2 resolution = u_resolution * 0.5;\n// vec2 m = resolution * u_mouse * vec2(1., 1.);\n// float dist = smoothstep(2., 0., distance(pos.xy + u_offset.xy, m));\n// pos *= max(1., 1. + dist * 0.1 + dist * abs(sin(basePos.y * 120. + u_time * 0.5)) * 0.1);\n\nfloat n = snoise(pos * u_amplitude);\n// float n2 = snoise(pos * u_amplitude2 + u_time * 0.2);\nmat4 rotMat = rotationMatrix(vec3(1., 0., 1.), n);\n// mat4 rotMat2 = rotationMatrix(vec3(0., 1., 0.), mod(u_time * a_random.x * 2., 3.1416 * 2.));\nmat4 rotMat2 = rotationMatrix(vec3(0., 1., 1.), mod(n + u_time, 3.1416 * 2.));\n\nfloat scale = texture2D(t_scale, a_id).x * u_scale;\nfloat documentScale = scale;\nfloat scale2 = texture2D(t_scale, vec2(a_id.x + 0.5, a_id.y)).x * u_scale;\nfloat scale3 = texture2D(t_scale, vec2(a_id.x, a_id.y + 0.5)).x * u_scale;\nfloat scale4 = texture2D(t_scale, vec2(a_id.x + 0.5, a_id.y + 0.5)).x * u_scale;\nscale = mix(scale, scale2, u_progress);\nscale = mix(scale, scale3, max(0., u_progress - 1.));\nscale = mix(scale, scale4, max(0., u_progress - 2.));\n// Limit the extra size to the first transition; later native blends extrapolate.\nscale += documentScale * (u_documentParticleScale - 1.) * (1. - clamp(u_progress, 0., 1.));\n\nscale += dist * 0.75 * abs( u_explode - 1.);\n\n#ifdef USE_INSTANCING\n  mat4 instanceMat = instanceMatrix;\n\n  instanceMat[3][0] = instanceMat[3][0] + pos.x;\n  instanceMat[3][1] = instanceMat[3][1] + pos.y;\n  instanceMat[3][2] = instanceMat[3][2] + pos.z;\n\n  mat4 rotMat3 = mat4(calcLookAtMatrix(vec3(instanceMat[3][0] + u_offset.x, instanceMat[3][1] + u_offset.y, instanceMat[3][2]), cameraPosition, 0.));\n\n  // instanceMat[0][0] = instanceMat[0][0] * smoothstep(0., 1., scale);\n  // instanceMat[1][1] = instanceMat[1][1] * smoothstep(0., 1., scale);\n  // instanceMat[2][2] = instanceMat[2][2] * smoothstep(0., 1., scale);\n\n  instanceMat[0][0] = instanceMat[0][0] * scale;\n  instanceMat[1][1] = instanceMat[1][1] * scale;\n  instanceMat[2][2] = instanceMat[2][2] * scale;\n\n  // instanceMat *= rotMat;\n  if (u_mobileRotation > 0.) {\n    instanceMat *= rotMat3;\n  } else {\n    instanceMat *= rotMat2;\n  }\n\n\tmvPosition = instanceMat * mvPosition;\n  // mvPosition.xyz += u_offset;\n#endif\n\n// Offset Position -----\nmat4 modViewMatrix = modelViewMatrix;\nmodViewMatrix[3][0] += u_offset.x;\nmodViewMatrix[3][1] += u_offset.y;\nmodViewMatrix *= rotationMatrix(vec3(1., 0., 0.), u_rotation.x);\nmodViewMatrix *= rotationMatrix(vec3(0., 1., 0.), u_rotation.y);\nmodViewMatrix *= rotationMatrix(vec3(0., 0., 1.), u_rotation.z);\n\nmvPosition = modViewMatrix * mvPosition;\n\n// mat4 testMatrix = modelMatrix;\n// testMatrix[3][0] += u_offset.x;\n// testMatrix *= rotationMatrix(vec3(0., 1., 0.), u_rotation);\n\n// mvPosition2 = testMatrix * mvPosition2;\n\nv_pos = mvPosition.xyz;\nv_pos.z += 10.;\n\n// // Mouse Animation -----\n// vec2 resolution = u_resolution * 0.5;\n// vec2 m = u_mouse * vec2(1., 1.);\n// // float dist = smoothstep(.1, 0., distance(mvPosition.xy / resolution, m));\n// float dist = step(distance(mvPosition.xy / resolution, m), .1);\n// mvPosition.x += dist * sin(u_time * a_random.y) * a_random.z;\n// mvPosition.y += dist * cos(u_time * a_random.y) * a_random.z;\n// // mvPosition.z += dist * cos(u_time * a_random.y) * a_random.z;\n// // mvPosition.z += dist * abs(sin(basePos.y * 120. + u_time * 0.5)) * 1.5;\n\n// vec4 tFluid = texture2D( t_fluid, (mvPosition.xy + vec2(1.) ) * 0.5);\n// mvPosition.x += tFluid.r * 0.01;\n// mvPosition.x -= tFluid.b * 0.01;\n// pos.y += tFluid.g * 0.01;\n// mvPosition.z += tFluid.r * 0.05;\n\ngl_Position = projectionMatrix * mvPosition;\n\nv_id = a_id;\nv_hover = dist;";
 var nn = "#define GLSLIFY 1\n//\n// Description : Array and textureless GLSL 2D/3D/4D simplex \n//               noise functions.\n//      Author : Ian McEwan, Ashima Arts.\n//  Maintainer : stegu\n//     Lastmod : 20201014 (stegu)\n//     License : Copyright (C) 2011 Ashima Arts. All rights reserved.\n//               Distributed under the MIT License. See LICENSE file.\n//               https://github.com/ashima/webgl-noise\n//               https://github.com/stegu/webgl-noise\n// \n\nvec3 mod289(vec3 x) {\n  return x - floor(x * (1.0 / 289.0)) * 289.0;\n}\n\nvec4 mod289(vec4 x) {\n  return x - floor(x * (1.0 / 289.0)) * 289.0;\n}\n\nvec4 permute(vec4 x) {\n     return mod289(((x*34.0)+10.0)*x);\n}\n\nvec4 taylorInvSqrt(vec4 r)\n{\n  return 1.79284291400159 - 0.85373472095314 * r;\n}\n\nfloat snoise(vec3 v)\n  { \n  const vec2  C = vec2(1.0/6.0, 1.0/3.0) ;\n  const vec4  D = vec4(0.0, 0.5, 1.0, 2.0);\n\n// First corner\n  vec3 i  = floor(v + dot(v, C.yyy) );\n  vec3 x0 =   v - i + dot(i, C.xxx) ;\n\n// Other corners\n  vec3 g = step(x0.yzx, x0.xyz);\n  vec3 l = 1.0 - g;\n  vec3 i1 = min( g.xyz, l.zxy );\n  vec3 i2 = max( g.xyz, l.zxy );\n\n  //   x0 = x0 - 0.0 + 0.0 * C.xxx;\n  //   x1 = x0 - i1  + 1.0 * C.xxx;\n  //   x2 = x0 - i2  + 2.0 * C.xxx;\n  //   x3 = x0 - 1.0 + 3.0 * C.xxx;\n  vec3 x1 = x0 - i1 + C.xxx;\n  vec3 x2 = x0 - i2 + C.yyy; // 2.0*C.x = 1/3 = C.y\n  vec3 x3 = x0 - D.yyy;      // -1.0+3.0*C.x = -0.5 = -D.y\n\n// Permutations\n  i = mod289(i); \n  vec4 p = permute( permute( permute( \n             i.z + vec4(0.0, i1.z, i2.z, 1.0 ))\n           + i.y + vec4(0.0, i1.y, i2.y, 1.0 )) \n           + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));\n\n// Gradients: 7x7 points over a square, mapped onto an octahedron.\n// The ring size 17*17 = 289 is close to a multiple of 49 (49*6 = 294)\n  float n_ = 0.142857142857; // 1.0/7.0\n  vec3  ns = n_ * D.wyz - D.xzx;\n\n  vec4 j = p - 49.0 * floor(p * ns.z * ns.z);  //  mod(p,7*7)\n\n  vec4 x_ = floor(j * ns.z);\n  vec4 y_ = floor(j - 7.0 * x_ );    // mod(j,N)\n\n  vec4 x = x_ *ns.x + ns.yyyy;\n  vec4 y = y_ *ns.x + ns.yyyy;\n  vec4 h = 1.0 - abs(x) - abs(y);\n\n  vec4 b0 = vec4( x.xy, y.xy );\n  vec4 b1 = vec4( x.zw, y.zw );\n\n  //vec4 s0 = vec4(lessThan(b0,0.0))*2.0 - 1.0;\n  //vec4 s1 = vec4(lessThan(b1,0.0))*2.0 - 1.0;\n  vec4 s0 = floor(b0)*2.0 + 1.0;\n  vec4 s1 = floor(b1)*2.0 + 1.0;\n  vec4 sh = -step(h, vec4(0.0));\n\n  vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;\n  vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;\n\n  vec3 p0 = vec3(a0.xy,h.x);\n  vec3 p1 = vec3(a0.zw,h.y);\n  vec3 p2 = vec3(a1.xy,h.z);\n  vec3 p3 = vec3(a1.zw,h.w);\n\n//Normalise gradients\n  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));\n  p0 *= norm.x;\n  p1 *= norm.y;\n  p2 *= norm.z;\n  p3 *= norm.w;\n\n// Mix final noise value\n  vec4 m = max(0.5 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);\n  m = m * m;\n  return 105.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), \n                                dot(p2,x2), dot(p3,x3) ) );\n  }";
 var rn = "#define GLSLIFY 1\nfloat qinticOut(float t) {\n  // return 1.0 - (pow(t - 1.0, 5.0));\n  return 1.0 - pow(1.0 - t , 5.0);\n  // return 1.0 - ((t - 1.0)*(t - 1.0)*(t - 1.0)*(t - 1.0)*(t - 1.0));\n}\n";
 var on = "#define GLSLIFY 1\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return step(inValue , 0.5) * inValue + step(0.5,outValue) * outValue;\n}\n";
 var sn = "precision highp float;\n#define GLSLIFY 1\n\nuniform mat4 projectionMatrix;\nuniform mat4 modelMatrix;\nuniform mat4 viewMatrix;\nuniform mat4 modelViewMatrix;\n\nattribute lowp vec2 position;\nattribute highp vec2 uv;\n\nvarying vec2 vUv;\n\nvoid main() {\n\n  vUv = uv;\n\n  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 0., 1.);\n}\n";
+// Both pages share their particle bank; the first keeps its existing fit.
+const streamChoreography = require("./document-stream-choreography.cjs");
+const streamScroll = require("./document-stream-scroll.cjs");
+const stampStage = require("./document-stamp-stage.cjs");
+const visaStage = require("./document-visa-stage.cjs");
+const HERO_DOCUMENT_FORMATION_SCALE = 1.8375;
+const HERO_DOCUMENT_PARTICLE_SCALE = 1.65;
 class an extends Re.T {
   constructor({
     fluid: e = null
@@ -3955,6 +3977,7 @@ class an extends Re.T {
     };
     this._position1 = new He.P(0, -1.19, 0);
     this.position.copy(this._position1);
+    this._heroDocumentFit = { lift: 0 };
     this._fluid = e;
   }
   _setupFBO() {
@@ -4093,9 +4116,38 @@ class an extends Re.T {
       height: 200,
       type: u.isDesktop ? Le.VzW : Le.cLu
     });
+    this._streamSeeds = new qt.I(streamChoreography.createSeeds(), 100, 100, Le.wk1, Le.VzW, Le.xfE, Le.rpg, Le.rpg, Le.TyD, Le.TyD, 0);
+    this._streamSeeds.generateMipmaps = false;
+    this._streamSeeds.needsUpdate = true;
+    this._streamUniforms = {
+      u_visaView: { type: "mat4", value: new It.y() },
+      u_visaInk: { type: "float", value: 0 },
+      u_visaMark: { type: "sampler2D", value: u.WebGL.assets.textures.visa_mark },
+      u_stampView: { type: "mat4", value: new It.y() },
+      u_stampInk: { type: "float", value: 0 },
+      u_stampMark: { type: "sampler2D", value: u.WebGL.assets.textures.stamp_mark },
+      u_stampParticleScale: { type: "float", value: HERO_DOCUMENT_PARTICLE_SCALE },
+      u_stampLogoEnd: { type: "float", value: this.royYEnd },
+      u_streamSeeds: { type: "sampler2D", value: this._streamSeeds },
+      u_streamStages: { type: "vec3", value: new He.P() },
+      u_streamView: { type: "mat4", value: new It.y() },
+      u_streamInverse: { type: "mat4", value: new It.y() },
+      u_streamViewport: { type: "vec2", value: new i.F() },
+      u_streamFrame: { type: "vec3", value: new He.P() },
+      u_streamProgress: { type: "float", value: 0 },
+      u_streamClock: { type: "float", value: 0 },
+      u_streamPaperScale: { type: "float", value: streamChoreography.STREAM_PAPER_SCALE },
+      u_streamPathScale: { type: "float", value: 1 },
+      u_streamDepthSpan: { type: "float", value: streamChoreography.STREAM_DEPTH_SPAN },
+      u_streamDepthCenter: { type: "float", value: 10 },
+      u_streamConvergence: { type: "float", value: 1 },
+      u_streamLarge: { type: "float", value: 0 }
+    };
+    this._streamRotation = new It.y();
     this._simulationPos = new Jt({
       material: new Yt.F({
         uniforms: {
+          u_documentFormationScale: { value: HERO_DOCUMENT_FORMATION_SCALE },
           t_position: {
             value: null
           },
@@ -4134,10 +4186,12 @@ class an extends Re.T {
           }
         },
         vertexShader: sn,
-        fragmentShader: "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D t_position;\nuniform sampler2D t_oPos;\nuniform sampler2D t_velocity;\nuniform sampler2D t_params;\nuniform sampler2D t_params2;\n\nuniform float u_factor;\nuniform float u_length;\nuniform float u_show;\nuniform float u_explode;\nuniform float u_progress;\nuniform float u_rendered;\n\nvarying vec2 vUv;\n\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return step(inValue , 0.5) * inValue + step(0.5,outValue) * outValue;\n}\n\nvoid main() {\n  vec4 tOpos = texture2D(t_oPos, vUv);\n  vec3 pos = tOpos.xyz;\n\n  if (u_rendered > 0.) {\n    vec4 tVelocity = texture2D(t_velocity, vUv);\n    pos += tVelocity.xyz;\n\n  } else {\n    vec4 tParams = texture2D(t_params, vUv);\n    vec4 tParams2 = texture2D(t_params2, vUv);\n\n    // Show Animation -----\n    float d = 0.00005;\n    float d2 = 0.0005;\n    float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * tParams.z));\n    showVal = qinticInOut(showVal);\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + u_explode * tParams.y;\n    float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + min(1., max(0., (u_explode * (u_length - 1.)) - d2 * tParams2.w));\n\n    pos = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5)).xyz;\n    vec3 basePos = pos;\n\n    pos.x = (pos.x - 0.5) * 2. * radius;\n    pos.y = (pos.y - 0.5) * 2. * radius;\n    pos.z = (pos.z - 0.5) * 2. * radius;\n\n    vec3 pos2 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5)).xyz;\n    pos2.x = (pos2.x - 0.5) * 2. * radius;\n    pos2.y = (pos2.y - 0.5) * 2. * radius;\n    pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n    vec3 pos3 = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos3.x = (pos3.x - 0.5) * 2. * radius;\n    pos3.y = (pos3.y - 0.5) * 2. * radius;\n    pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n    vec3 pos4 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos4.x = (pos4.x - 0.5) * 2. * radius;\n    pos4.y = (pos4.y - 0.5) * 2. * radius;\n    pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n    pos = mix(pos, pos2, u_progress);\n    pos = mix(pos, pos3, max(0., u_progress - 1.));\n    pos = mix(pos, pos4, max(0., u_progress - 2.));\n  }\n\n  gl_FragColor = vec4(pos, 1.);\n}\n"
+        fragmentShader: "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D t_position;\nuniform sampler2D t_oPos;\nuniform sampler2D t_velocity;\nuniform sampler2D t_params;\nuniform sampler2D t_params2;\n\nuniform float u_documentFormationScale;\nuniform float u_factor;\nuniform float u_length;\nuniform float u_show;\nuniform float u_explode;\nuniform float u_progress;\nuniform float u_rendered;\n\nvarying vec2 vUv;\n\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return step(inValue , 0.5) * inValue + step(0.5,outValue) * outValue;\n}\n\nvoid main() {\n  vec4 tOpos = texture2D(t_oPos, vUv);\n  vec3 pos = tOpos.xyz;\n\n  if (u_rendered > 0.) {\n    vec4 tVelocity = texture2D(t_velocity, vUv);\n    pos += tVelocity.xyz;\n\n  } else {\n    vec4 tParams = texture2D(t_params, vUv);\n    vec4 tParams2 = texture2D(t_params2, vUv);\n\n    // Show Animation -----\n    float d = 0.00005;\n    float d2 = 0.0005;\n    float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * tParams.z));\n    showVal = qinticInOut(showVal);\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + u_explode * tParams.y;\n    float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + min(1., max(0., (u_explode * (u_length - 1.)) - d2 * tParams2.w));\n\n    pos = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5)).xyz;\n    vec3 basePos = pos;\n\n    pos.x = (pos.x - 0.5) * 2. * radius;\n    pos.y = (pos.y - 0.5) * 2. * radius;\n    pos.z = (pos.z - 0.5) * 2. * radius;\n    pos *= mix(u_documentFormationScale, 1., step(1., u_progress));\n\n    vec3 pos2 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5)).xyz;\n    pos2.x = (pos2.x - 0.5) * 2. * radius;\n    pos2.y = (pos2.y - 0.5) * 2. * radius;\n    pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n    vec3 pos3 = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos3.x = (pos3.x - 0.5) * 2. * radius;\n    pos3.y = (pos3.y - 0.5) * 2. * radius;\n    pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n    vec3 pos4 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos4.x = (pos4.x - 0.5) * 2. * radius;\n    pos4.y = (pos4.y - 0.5) * 2. * radius;\n    pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n    pos = mix(pos, pos2, u_progress);\n    pos = mix(pos, pos3, max(0., u_progress - 1.));\n    pos = mix(pos, pos4, max(0., u_progress - 2.));\n  }\n\n  gl_FragColor = vec4(pos, 1.);\n}\n"
       }),
       scene: true
     });
+    Object.assign(this._simulationPos.material.uniforms, this._streamUniforms);
+    this._simulationPos.material.fragmentShader = streamChoreography.patchSimulation(this._simulationPos.material.fragmentShader, { initial: true });
     this._simulationPos.material.uniforms.t_position.value = u.WebGL.assets.textures.cone_position_exr;
     this._simulationPos.material.uniforms.t_position.value.minFilter = this._simulationPos.material.uniforms.t_position.value.magFilter = Le.TyD;
     this._simulationPos.material.uniforms.t_position.value.flipY = true;
@@ -4146,6 +4200,7 @@ class an extends Re.T {
     this._simulationSpring = new Jt({
       material: new Yt.F({
         uniforms: {
+          u_documentFormationScale: { value: HERO_DOCUMENT_FORMATION_SCALE },
           t_position: {
             value: null
           },
@@ -4196,10 +4251,12 @@ class an extends Re.T {
           }
         },
         vertexShader: sn,
-        fragmentShader: "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D t_oTarget;\nuniform sampler2D t_position;\nuniform sampler2D t_oVelocity;\nuniform sampler2D t_params;\nuniform sampler2D t_params2;\nuniform sampler2D t_params3;\n\nuniform vec2 u_resolution;\nuniform float u_factor;\nuniform float u_length;\nuniform float u_show;\nuniform float u_explode;\nuniform float u_progress;\nuniform float u_spring;\nuniform float u_friction;\nuniform float u_rendered;\nuniform float u_delay;\n\nvarying vec2 vUv;\n\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return step(inValue , 0.5) * inValue + step(0.5,outValue) * outValue;\n}\n\nvoid main() {\n  float vx = 0.;\n  float vy = 0.;\n  float vz = 0.;\n\n  if (u_rendered > 0.) {\n    vec4 tParams = texture2D(t_params, vUv);\n    vec4 tParams2 = texture2D(t_params2, vUv);\n    vec4 tParams3 = texture2D(t_params3, vUv);\n\n    // Show Animation -----\n    float d = 0.00005;\n    float d3 = 0.00015;\n    float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * tParams.z));\n    showVal = qinticInOut(showVal);\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + u_explode * tParams.y;\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w)) * 6.;\n    float radius = mix(u_factor + tParams.x * 3., u_factor, showVal);\n\n    vec3 pos = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5)).xyz;\n    vec3 basePos = pos;\n\n    pos.x = (pos.x - 0.5) * 2. * radius;\n    pos.y = (pos.y - 0.5) * 2. * radius;\n    pos.z = (pos.z - 0.5) * 2. * radius;\n\n    vec3 pos2 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5)).xyz;\n    pos2.x = (pos2.x - 0.5) * 2. * radius;\n    pos2.y = (pos2.y - 0.5) * 2. * radius;\n    pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n    vec3 pos3 = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos3.x = (pos3.x - 0.5) * 2. * radius;\n    pos3.y = (pos3.y - 0.5) * 2. * radius;\n    pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n    vec3 pos4 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos4.x = (pos4.x - 0.5) * 2. * radius;\n    pos4.y = (pos4.y - 0.5) * 2. * radius;\n    pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xy *= u_resolution * 2.;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xyz *= vec3(u_resolution * 2., u_resolution.x * 2.);\n\n    float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for dekstop\n    pos = mix(pos, pos2, min(1., max(0., ((u_progress * (1. + d4 * (u_length - 1.))) - d4 * tParams2.x))));\n    pos = mix(pos, pos3, min(1., max(0., ((max(0., u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y))));\n    pos = mix(pos, pos4, min(1., max(0., ((max(0., u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z))));\n    pos = mix(pos, pos * tParams3.x, min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w)));\n\n    vec4 tOtarget = texture2D(t_oTarget, vUv);\n    vec4 tOVelocity = texture2D(t_oVelocity, vUv);\n\n    float spring = u_spring + tParams.w;\n    float friction = u_friction;\n\n    float dx = pos.x - tOtarget.x;\n    float dy = pos.y - tOtarget.y;\n    float dz = pos.z - tOtarget.z;\n\n    float ax = dx * spring;\n    float ay = dy * spring;\n    float az = dz * spring;\n\n    vx = tOVelocity.x + ax;\n    vy = tOVelocity.y + ay;\n    vz = tOVelocity.z + az;\n\n    vx *= friction;\n    vy *= friction;\n    vz *= friction;\n  }\n\n  gl_FragColor = vec4(vec3(vx, vy, vz), 1.);\n}\n"
+        fragmentShader: "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D t_oTarget;\nuniform sampler2D t_position;\nuniform sampler2D t_oVelocity;\nuniform sampler2D t_params;\nuniform sampler2D t_params2;\nuniform sampler2D t_params3;\n\nuniform vec2 u_resolution;\nuniform float u_documentFormationScale;\nuniform float u_factor;\nuniform float u_length;\nuniform float u_show;\nuniform float u_explode;\nuniform float u_progress;\nuniform float u_spring;\nuniform float u_friction;\nuniform float u_rendered;\nuniform float u_delay;\n\nvarying vec2 vUv;\n\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return step(inValue , 0.5) * inValue + step(0.5,outValue) * outValue;\n}\n\nvoid main() {\n  float vx = 0.;\n  float vy = 0.;\n  float vz = 0.;\n\n  if (u_rendered > 0.) {\n    vec4 tParams = texture2D(t_params, vUv);\n    vec4 tParams2 = texture2D(t_params2, vUv);\n    vec4 tParams3 = texture2D(t_params3, vUv);\n\n    // Show Animation -----\n    float d = 0.00005;\n    float d3 = 0.00015;\n    float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * tParams.z));\n    showVal = qinticInOut(showVal);\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + u_explode * tParams.y;\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w)) * 6.;\n    float radius = mix(u_factor + tParams.x * 3., u_factor, showVal);\n\n    vec3 pos = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5)).xyz;\n    vec3 basePos = pos;\n\n    pos.x = (pos.x - 0.5) * 2. * radius;\n    pos.y = (pos.y - 0.5) * 2. * radius;\n    pos.z = (pos.z - 0.5) * 2. * radius;\n    pos *= u_documentFormationScale;\n\n    vec3 pos2 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5)).xyz;\n    pos2.x = (pos2.x - 0.5) * 2. * radius;\n    pos2.y = (pos2.y - 0.5) * 2. * radius;\n    pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n    vec3 pos3 = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos3.x = (pos3.x - 0.5) * 2. * radius;\n    pos3.y = (pos3.y - 0.5) * 2. * radius;\n    pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n    vec3 pos4 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos4.x = (pos4.x - 0.5) * 2. * radius;\n    pos4.y = (pos4.y - 0.5) * 2. * radius;\n    pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xy *= u_resolution * 2.;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xyz *= vec3(u_resolution * 2., u_resolution.x * 2.);\n\n    float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for dekstop\n    pos = mix(pos, pos2, min(1., max(0., ((u_progress * (1. + d4 * (u_length - 1.))) - d4 * tParams2.x))));\n    pos = mix(pos, pos3, min(1., max(0., ((max(0., u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y))));\n    pos = mix(pos, pos4, min(1., max(0., ((max(0., u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z))));\n    pos = mix(pos, pos * tParams3.x, min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w)));\n\n    vec4 tOtarget = texture2D(t_oTarget, vUv);\n    vec4 tOVelocity = texture2D(t_oVelocity, vUv);\n\n    float spring = u_spring + tParams.w;\n    float friction = u_friction;\n\n    float dx = pos.x - tOtarget.x;\n    float dy = pos.y - tOtarget.y;\n    float dz = pos.z - tOtarget.z;\n\n    float ax = dx * spring;\n    float ay = dy * spring;\n    float az = dz * spring;\n\n    vx = tOVelocity.x + ax;\n    vy = tOVelocity.y + ay;\n    vz = tOVelocity.z + az;\n\n    vx *= friction;\n    vy *= friction;\n    vz *= friction;\n  }\n\n  gl_FragColor = vec4(vec3(vx, vy, vz), 1.);\n}\n"
       }),
       scene: true
     });
+    Object.assign(this._simulationSpring.material.uniforms, this._streamUniforms);
+    this._simulationSpring.material.fragmentShader = streamChoreography.patchSimulation(this._simulationSpring.material.fragmentShader, { initial: false });
     this._simulationSpring.material.uniforms.t_position.value = u.WebGL.assets.textures.cone_position_exr;
     this._simulationSpring.material.uniforms.t_position.value.minFilter = this._simulationSpring.material.uniforms.t_position.value.magFilter = Le.TyD;
     this._simulationSpring.material.uniforms.t_position.value.flipY = true;
@@ -4314,6 +4371,10 @@ class an extends Re.T {
         id: "u_mobileRotation",
         type: "float",
         value: u.isDesktop ? 0 : Math.PI * 1
+      }, {
+        id: "u_documentParticleScale",
+        type: "float",
+        value: HERO_DOCUMENT_PARTICLE_SCALE
       }],
       onBeforeCompile: function (e) {
         for (let t = 0; t < this._customUniforms.length; t++) {
@@ -4344,6 +4405,17 @@ ${e.fragmentShader}`;
         e.fragmentShader = e.fragmentShader.replace("#include <output_fragment>", "#define GLSLIFY 1\nvec3 col = texture2D(t_color, v_id).xyz;\nvec3 col2 = texture2D(t_color, vec2(v_id.x + 0.5, v_id.y)).xyz;\nvec3 col3 = texture2D(t_color, vec2(v_id.x, v_id.y + 0.5)).xyz;\nvec3 col4 = texture2D(t_color, vec2(v_id.x + 0.5, v_id.y + 0.5)).xyz;\ncol = mix(col, col2, u_progress);\ncol = mix(col, col3, max(0., u_progress - 1.));\ncol = mix(col, col4, max(0., u_progress - 2.));\n// col += v_hover * 0.5;\ncol = mix(col, vec3(0.45), max(0., v_hover - u_explode) * abs( u_explode - 1.));\n\n#ifdef OPAQUE\ndiffuseColor.a = 1.0;\n#endif\n// https://github.com/mrdoob/three.js/pull/22425\n#ifdef USE_TRANSMISSION\ndiffuseColor.a *= transmissionAlpha + 0.1;\n#endif\noutgoingLight.rgb = col.rgb * u_colorFactor;\n// outgoingLight.rgb = vec3(smoothstep(-7., 5., v_pos.z));\n// outgoingLight.rgb = vec3(step(1., v_pos.y / (u_resolution.y * 0.5)));\n// outgoingLight.rgb = vec3(v_pos.x / (u_resolution.x * 0.5));\n// outgoingLight.rgb = vec3(v_pos.y / (u_resolution.y * 0.5));\n// float alpha = diffuseColor.a * mix(smoothstep(-8., 5., v_pos.z), 1., u_explode);\nfloat alpha = diffuseColor.a * smoothstep(-4.5, 4., v_pos.z);\ngl_FragColor = vec4( outgoingLight, alpha );");
       }
     });
+    // Both simulation stages and both render passes share the same live uniforms.
+    for (const [id, uniform] of Object.entries(this._streamUniforms)) {
+      this._material.customUniforms.push(Object.assign(uniform, { id }));
+    }
+    const compile = this._material.onBeforeCompile;
+    this._material.onBeforeCompile = shader => {
+      compile.call(this._material, shader);
+      streamChoreography.patchRender(shader);
+      stampStage.patchRender(shader);
+      visaStage.patchRender(shader);
+    };
     this._material.customUniforms[0].value = u.WebGL.assets.textures.cone_position_exr;
     this._material.customUniforms[1].value = u.WebGL.assets.textures.cone_scale;
     this._material.customUniforms[2].value = u.WebGL.assets.textures.cone_color;
@@ -4402,6 +4474,11 @@ ${e.fragmentShader}`;
     this._depthMaterial = new Bt({
       transparent: true,
       customUniforms: {
+        ...this._streamUniforms,
+        u_documentParticleScale: {
+          type: "float",
+          value: HERO_DOCUMENT_PARTICLE_SCALE
+        },
         t_position: {
           type: "sampler2D",
           value: this._material.customUniforms[0].value
@@ -4509,10 +4586,53 @@ ${e.fragmentShader}`;
         e.vertexShader = "attribute float a_order;\n" + e.vertexShader;
         e.vertexShader = "attribute float a_index;\n" + e.vertexShader;
         e.vertexShader = e.vertexShader.replace("#include <project_vertex>", tn);
+        streamChoreography.patchRender(e, { depth: true });
+        stampStage.patchRender(e, { depth: true });
+        visaStage.patchRender(e, { depth: true });
       }
     });
     this._mesh.customDepthMaterial = this._depthMaterial;
     this.add(this._mesh);
+    this._setupStampBody();
+  }
+  _setupStampBody() {
+    this._stampBodyUniforms = {
+      u_stampView: this._streamUniforms.u_stampView,
+      u_stampBody: { value: new He.P(1, 1, 0) },
+      u_stampBodyTexture: { value: u.WebGL.assets.textures.stamp_body_top }
+    };
+    const material = depth => new Yt.F({
+      uniforms: this._stampBodyUniforms,
+      transparent: true,
+      depthWrite: false,
+      // The page is positioned in the vertex shader; draw its attached body
+      // over the mosaic. The foreground scene still renders in front of it.
+      depthTest: false,
+      vertexShader: stampStage.bodyVertex,
+      fragmentShader: stampStage.bodyFragment(depth)
+    });
+    this._stampBody = new Ie.K(new at.B(1, 1), material(false));
+    this._stampBody.customDepthMaterial = material(true);
+    this._stampBody.frustumCulled = false;
+    this._stampBody.visible = false;
+    this._stampBody.renderOrder = 2;
+    this.add(this._stampBody);
+    this._visaBodyUniforms = {
+      u_stampView: this._streamUniforms.u_visaView,
+      u_stampBody: { value: new He.P(1,1,0) },
+      u_stampBodyTexture: { value: u.WebGL.assets.textures.visa_body }
+    };
+    const visaMaterial = depth => new Yt.F({uniforms:this._visaBodyUniforms,transparent:true,depthWrite:false,depthTest:false,
+      vertexShader:visaStage.bodyVertex,fragmentShader:stampStage.bodyFragment(depth)});
+    this._visaBody = new Ie.K(new at.B(1,1),visaMaterial(false));
+    this._visaBody.customDepthMaterial=visaMaterial(true);
+    this._visaBody.frustumCulled=false;
+    this._visaBody.visible=false;
+    this._visaBody.renderOrder=2;
+    this.add(this._visaBody);
+    this._stampRotation = new It.y();
+    this._stampScale = new He.P();
+    this._reducedStampMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   }
   activate({
     delay: e = 0
@@ -4627,7 +4747,91 @@ ${e.fragmentShader}`;
       this._material.customUniforms[19].value.y = this._pSize2.height;
       this._depthMaterial.customUniforms.u_resolution2.value.x = this._pSize2.width;
       this._depthMaterial.customUniforms.u_resolution2.value.y = this._pSize2.height;
+      this._fitHeroDocument(e);
+      this._fitStreamPerspective(e);
+      this._fitStampDocument(e);
     }
+  }
+  _fitHeroDocument(camera) {
+    const height = u.window.h;
+    const header = document.querySelector(".js-header-inner");
+    const top = Math.max(height * 0.1, 80, (header ? header.getBoundingClientRect().bottom : 0) + 20);
+    let bottom = height - Math.max(32, height * 0.08);
+    const notice = document.querySelector(".js-cookie-notice");
+    if (notice && !u.cookieNoticeAccepted) {
+      // Use layout height rather than the notice's animated entrance position.
+      const style = getComputedStyle(notice);
+      if (style.display !== "none") {
+        bottom = Math.min(bottom, height - (parseFloat(style.bottom) || 0) - notice.offsetHeight - 20);
+      }
+    }
+    const available = Math.max(1, bottom - top);
+    const targetHeight = Math.min(height * 0.78, available);
+    const focal = height * camera.projectionMatrix.elements[5] * 0.5;
+    const depth = camera.position.z;
+    const relative = this._factor / 4.35;
+    const baseY = this.position.y + (u.isMobile ? 2 : 0);
+    this._geometry.computeBoundingSphere();
+    const sphere = this._geometry.boundingSphere;
+    const particleRadius = (sphere.radius + sphere.center.length()) * 0.1;
+    const bounds = scale => {
+      const ratio = scale / HERO_DOCUMENT_FORMATION_SCALE;
+      // Include rotating mini-documents and their native enlargement under the pointer.
+      const radius = particleRadius * (90 / 255 * this._scale * HERO_DOCUMENT_PARTICLE_SCALE * ratio + 0.75);
+      // Generator bounds: half-height 2.4, folded corner depth below 0.38.
+      const front = 0.38 * scale * relative + radius;
+      const half = 2.4 * scale * relative + radius;
+      const pixels = focal / Math.max(0.1, depth - front);
+      return { front, height: half * pixels * 2,
+        top: height * 0.5 - (baseY + half) * pixels,
+        bottom: height * 0.5 - (baseY - half) * pixels };
+    };
+    let scale = HERO_DOCUMENT_FORMATION_SCALE;
+    let lift = 0;
+    const original = bounds(scale);
+    if (original.top < top || original.bottom > bottom || original.height > targetHeight) {
+      let low = 0;
+      let high = scale;
+      for (let step = 0; step < 28; step++) {
+        const mid = (low + high) * 0.5;
+        if (bounds(mid).height > targetHeight) high = mid;
+        else low = mid;
+      }
+      scale = low;
+      const fitted = bounds(scale);
+      const center = top + available * 0.5;
+      lift = (height * 0.5 - center) * (depth - fitted.front) / focal - baseY;
+    }
+    const particleScale = HERO_DOCUMENT_PARTICLE_SCALE * scale / HERO_DOCUMENT_FORMATION_SCALE;
+    this._simulationPos.material.uniforms.u_documentFormationScale.value = scale;
+    this._simulationSpring.material.uniforms.u_documentFormationScale.value = scale;
+    this._material.customUniforms.find(uniform => uniform.id === "u_documentParticleScale").value = particleScale;
+    this._depthMaterial.customUniforms.u_documentParticleScale.value = particleScale;
+    this._heroDocumentFit = { lift, scale, particleScale, top, bottom, targetHeight };
+  }
+  _heroDocumentLift() {
+    const progress = Math.max(0, Math.min(1, u.sectionProgress));
+    return this._heroDocumentFit.lift * (1 - progress * progress * (3 - 2 * progress));
+  }
+  _fitStampDocument(camera) {
+    const sphere = this._geometry.boundingSphere;
+    const relative = this._factor / 4.35;
+    const cap = this._heroDocumentFit.scale * relative;
+    const radius = (sphere.radius + sphere.center.length())*.1*(90/255*this._scale*this._heroDocumentFit.particleScale);
+    this._stampLayout = stampStage.fitDocument({
+      width: u.window.w, height: u.window.h,
+      projectionX: camera.projectionMatrix.elements[0], projectionY: camera.projectionMatrix.elements[5],
+      top: this._heroDocumentFit.top, bottom: this._heroDocumentFit.bottom,
+      maxScale: cap, radius
+    });
+    this._visaLayout = stampStage.fitDocument({width:u.window.w,height:u.window.h,
+      projectionX:camera.projectionMatrix.elements[0],projectionY:camera.projectionMatrix.elements[5],
+      top:this._heroDocumentFit.top,bottom:this._heroDocumentFit.bottom,maxScale:cap,radius,center:true});
+    this._stampParticleScale = .65*this._heroDocumentFit.particleScale*this._stampLayout.scale/cap;
+    this._visaParticleScale = .65*this._heroDocumentFit.particleScale*this._visaLayout.scale/cap;
+    // Flat, aligned tiles should meet at their edges instead of covering the
+    // ink on adjacent cells. The first hero's native particle scale is unchanged.
+    this._streamUniforms.u_stampParticleScale.value = .65*this._heroDocumentFit.particleScale*this._stampLayout.scale/cap;
   }
   update(e) {
     if (this._loaded) {
@@ -4642,8 +4846,67 @@ ${e.fragmentShader}`;
       } else {
         this._updatePosition();
       }
+      this._updateStreamChoreography(e);
       this._updateFBO();
     }
+  }
+  _fitStreamPerspective(camera) {
+    const size = Nt(camera, 10);
+    const sphere = this._geometry.boundingSphere;
+    const layout = streamChoreography.fitStreamPerspective({
+      width: u.window.w, height: u.window.h, worldWidth: size.width, worldHeight: size.height,
+      projectionX: camera.projectionMatrix.elements[0], projectionY: camera.projectionMatrix.elements[5],
+      top: this._heroDocumentFit.top, bottom: this._heroDocumentFit.bottom,
+      radius: (sphere.radius + sphere.center.length()) * .1 * streamChoreography.STREAM_PAPER_SCALE
+    });
+    this._streamLayout = layout;
+    this._streamUniforms.u_streamFrame.value.set(layout.x, layout.width, layout.y);
+    this._streamUniforms.u_streamPathScale.value = layout.scale;
+    this._streamUniforms.u_streamPaperScale.value = layout.paperScale;
+    this._streamUniforms.u_streamDepthCenter.value = layout.depthCenter;
+    this._streamUniforms.u_streamDepthSpan.value = layout.depthSpan;
+    this._streamUniforms.u_streamConvergence.value = layout.convergence;
+    this._streamUniforms.u_streamLarge.value = layout.large;
+  }
+  _updateStreamChoreography(time) {
+    const camera = u.WebGL.particleCamera;
+    camera.updateMatrixWorld();
+    this.updateMatrixWorld(true);
+    const uniforms = this._streamUniforms;
+    uniforms.u_streamStages.value.set(...streamChoreography.stages(u.sectionProgress));
+    const delta = this._streamLastTime === undefined ? 0 : Math.max(0, Math.min(.05, time - this._streamLastTime));
+    this._streamLastTime = time;
+    if (u.sectionProgress >= streamChoreography.phases.gatherStart && u.sectionProgress < streamChoreography.phases.exitEnd) uniforms.u_streamClock.value += delta;
+    uniforms.u_streamProgress.value = u.sectionProgress;
+    const size = Nt(camera, 10);
+    uniforms.u_streamViewport.value.set(size.width, size.height);
+    const view = uniforms.u_streamView.value;
+    view.copy(camera.matrixWorldInverse).multiply(this._mesh.matrixWorld);
+    view.elements[12] += this._material.customUniforms[12].value.x;
+    view.elements[13] += this._material.customUniforms[12].value.y;
+    const rotation = this._material.customUniforms[15].value;
+    view.multiply(this._streamRotation.makeRotationX(-rotation.x));
+    view.multiply(this._streamRotation.makeRotationY(-rotation.y));
+    view.multiply(this._streamRotation.makeRotationZ(-rotation.z));
+    uniforms.u_streamInverse.value.copy(view).invert();
+    const stamp = stampStage.sample(u.sectionProgress, this._reducedStampMotion.matches);
+    const layout = this._stampLayout;
+    const stampView = uniforms.u_stampView.value;
+    stampView.makeTranslation(layout.startX+(layout.x-layout.startX)*stamp.move, layout.y, -10);
+    stampView.multiply(this._stampRotation.makeRotationY(stamp.angle));
+    stampView.scale(this._stampScale.setScalar(layout.scale));
+    uniforms.u_stampInk.value = stamp.ink;
+    this._stampBodyUniforms.u_stampBody.value.set(stamp.distance, stamp.scale, stamp.opacity);
+    this._stampBody.visible = stamp.opacity > .001;
+    this._stampState = stamp;
+    const visa = visaStage.sample(u.sectionProgress,this._reducedStampMotion.matches);
+    const finalLayout=this._visaLayout;
+    uniforms.u_visaView.value.makeTranslation(0,finalLayout.y,-10).scale(this._stampScale.setScalar(finalLayout.scale));
+    uniforms.u_stampParticleScale.value=u.sectionProgress>=5.7?this._visaParticleScale:this._stampParticleScale;
+    uniforms.u_visaInk.value=visa.ink;
+    this._visaBodyUniforms.u_stampBody.value.set(visa.distance,visa.scale,visa.opacity);
+    this._visaBody.visible=visa.opacity>.001;
+    this._visaState=visa;
   }
   _updateFBO() {
     if (this._hasRendered) {
@@ -4683,12 +4946,14 @@ ${e.fragmentShader}`;
     const e = u.sectionProgress;
     const t = zt(Ut(e, 0, 1, 0, -Math.PI * 0.5), -Math.PI * 0.5, 0) + zt(Ut(e, 2.7, 3, 0, Math.PI * 0.5), 0, Math.PI * 0.5) + zt(Ut(e, 3.3, 3.5, 0, Math.PI * 0.25), 0, Math.PI * 0.25) - zt(Ut(e, 4.5, 5, 0, Math.PI * 1.25), 0, Math.PI * 1.25) + zt(Ut(e, 5.7, this.royYEnd, 0, Math.PI), 0, Math.PI);
     const n = zt(Ut(e, 2.7, 3, 0, -0.489), -0.489, 0) + zt(Ut(e, 3.3, 3.5, 0, 0.6), 0, 0.6);
+    const stages = streamChoreography.stages(e);
+    const nativeRotation = 1 - stages[0] * (1 - stages[2]);
     this._material.customUniforms[15].value.x += (0 - this._material.customUniforms[15].value.x) * (this._easing * 0.75);
-    this._material.customUniforms[15].value.y += (t - this._material.customUniforms[15].value.y) * (this._easing * 0.75);
-    this._material.customUniforms[15].value.z += (n - this._material.customUniforms[15].value.z) * (this._easing * 0.75);
+    this._material.customUniforms[15].value.y += (t * nativeRotation - this._material.customUniforms[15].value.y) * (this._easing * 0.75);
+    this._material.customUniforms[15].value.z += (n * nativeRotation - this._material.customUniforms[15].value.z) * (this._easing * 0.75);
     this._depthMaterial.customUniforms.u_rotation.value.x += (0 - this._depthMaterial.customUniforms.u_rotation.value.x) * (this._easing * 0.75);
-    this._depthMaterial.customUniforms.u_rotation.value.y += (t - this._depthMaterial.customUniforms.u_rotation.value.y) * (this._easing * 0.75);
-    this._depthMaterial.customUniforms.u_rotation.value.z += (n - this._depthMaterial.customUniforms.u_rotation.value.z) * (this._easing * 0.75);
+    this._depthMaterial.customUniforms.u_rotation.value.y += (t * nativeRotation - this._depthMaterial.customUniforms.u_rotation.value.y) * (this._easing * 0.75);
+    this._depthMaterial.customUniforms.u_rotation.value.z += (n * nativeRotation - this._depthMaterial.customUniforms.u_rotation.value.z) * (this._easing * 0.75);
     this.rotation.y = this._params.baseRotation.y;
   }
   _updateMouse() {
@@ -4708,7 +4973,7 @@ ${e.fragmentShader}`;
     const t = zt(Ut(e, 0, 1, 3, -4.5), -4.5, 3) + zt(Ut(e, 1.25, 1.5, 0.905, 5), 0.905, 5) - zt(Ut(e, 2.8, 3, 0.905, 3), 0.905, 3) + zt(Ut(e, 3.3, 3.5, 0.905, 6), 0.905, 6) - zt(Ut(e, 4.5, 5, 0.905, 5), 0.905, 4);
     this._params.basePosition.x = t + this._material.customUniforms[10].value.x * 0;
     const n = zt(Ut(e, 2.7, 3, 0, 0.5), 0, 0.5) - zt(Ut(e, 3.3, 3.5, 0, 0.5), 0, 0.5) + zt(Ut(e, 5.7, 6, 0, 1.75), 0, 1.75);
-    this._params.basePosition.y = n + this._material.customUniforms[10].value.y * 0;
+    this._params.basePosition.y = n + this._material.customUniforms[10].value.y * 0 + this._heroDocumentLift();
     const i = zt(Ut(e, 1.1, 2.2, 0, 1), 0, 1) - zt(Ut(e, 2.8, 3, 0, 1), 0, 1) + zt(Ut(e, 4.5, 5, 0, 1), 0, 1) - zt(Ut(e, 5.7, 6, 0, 1), 0, 1);
     this._material.customUniforms[13].value += (i - this._material.customUniforms[13].value) * this._easing;
     this._simulationPos.material.uniforms.u_explode.value += (i - this._simulationPos.material.uniforms.u_explode.value) * this._easing;
@@ -4733,7 +4998,7 @@ ${e.fragmentShader}`;
     const e = u.sectionProgress;
     const t = zt(Ut(e, 0, 1, 1.5, 0), 0, 1.5) + zt(Ut(e, 1.25, 1.5, 0, 0), 0, 0) - zt(Ut(e, 2.8, 3, 0, 0), 0, 0) + zt(Ut(e, 3.3, 3.5, 0, 0), 0, 0) - zt(Ut(e, 4.5, 5, 0, 0), 0, 0);
     this._params.basePosition.x = t + this._material.customUniforms[10].value.x * 0.052;
-    this._params.basePosition.y = 2 + this._material.customUniforms[10].value.y * 0;
+    this._params.basePosition.y = 2 + this._material.customUniforms[10].value.y * 0 + this._heroDocumentLift();
     const n = zt(Ut(e, 1.4, 1.7, 0, 1), 0, 1) - zt(Ut(e, 2.7, 3, 0, 1), 0, 1) + zt(Ut(e, 4.5, 5, 0, 1), 0, 1) - zt(Ut(e, 5.7, 5.8, 0, 1), 0, 1);
     this._material.customUniforms[13].value += (n - this._material.customUniforms[13].value) * this._easing;
     this._simulationPos.material.uniforms.u_explode.value += (n - this._simulationPos.material.uniforms.u_explode.value) * this._easing;
@@ -5430,7 +5695,8 @@ class wn extends bt {
     });
     _n(this, "onRaf", () => {
       if (u.sectionIndex === this.id) {
-        u.sectionProgress = u.sectionIndex + Math.abs((u.ASS.currentPos - this.bcrTop) / this.bcr.height);
+        const fraction = Math.abs((u.ASS.currentPos - this.bcrTop) / this.bcr.height);
+        u.sectionProgress = u.sectionIndex + (this.el.hasAttribute("data-stream-stage") ? streamScroll.sectionFraction(fraction) : fraction);
       }
     });
     _n(this, "enter", () => {
@@ -5513,6 +5779,8 @@ class Sn {
   }
   build() {
     this.sections = ue(".js-section");
+    streamScroll.prepareSections(this.sections);
+    u.ASS.resize({ width: u.window.w, height: u.window.h });
     this.components = [];
     this.sections.forEach((e, t) => {
       this.components.push(new wn(e, t));
@@ -6035,6 +6303,7 @@ return new Promise((resolve, reject) => {
   O.enableDrag();
   u.html.style.setProperty("--vh", `${u.window.h * 0.01}px`);
   u.RAFCollection = new L();
+  streamScroll.prepareSections(ue(".js-section"));
   u.ASS = z.config({
     scrollbarStyles: false,
     disableRaf: true,

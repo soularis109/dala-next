@@ -15,7 +15,7 @@ export default function Investors() {
             </div>
             <div
               className="investor__icon d-none d-block@sm"
-              dom2webgl="c:Pyramid"
+              dom2webgl="c:InvestorDocument"
               material-color={investor.materialColor}
               start-x={investor.startX}
               parallax-speed={investor.parallaxSpeed}

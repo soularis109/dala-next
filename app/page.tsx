@@ -27,6 +27,7 @@ export default function Page() {
           <Introduction />
           <ManifestoIntro />
           <ManifestoBlock
+            streamStage
             align="items-end@md"
             title="Spark lightbulb moments"
             paragraphs={[
@@ -53,6 +54,7 @@ export default function Page() {
             ]}
           />
           <TeamInvestors />
+          <div className="js-section" section-name="visa" aria-hidden="true" style={{ height: "calc(var(--vh, 1vh) * 200)" }} />
           <Footer />
           <div style={{ position: "absolute", left: 0, bottom: "-1px", width: "2px", height: "2px" }}></div>
         </main>

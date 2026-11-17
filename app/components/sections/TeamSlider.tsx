@@ -1,10 +1,18 @@
 import { TEAM_MEMBERS, SLIDE_REPEAT_COUNT } from "../../data/team";
 
+// Set to false to restore the slider without changing scroll geometry.
+const HIDE_TEAM_SLIDER = true;
+
 export default function TeamSlider() {
   const slides = Array.from({ length: SLIDE_REPEAT_COUNT }).flatMap(() => TEAM_MEMBERS);
 
   return (
-    <div className="team-slider | js-slider">
+    <div
+      className="team-slider | js-slider"
+      data-team-slider-hidden={HIDE_TEAM_SLIDER ? "true" : undefined}
+      aria-hidden={HIDE_TEAM_SLIDER ? true : undefined}
+      inert={HIDE_TEAM_SLIDER ? true : undefined}
+    >
       <div className="team-slider__slides-container">
         <ul className="team-slider__slides | js-slides">
           {slides.map((member, i) => (
