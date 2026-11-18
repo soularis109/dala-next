@@ -19,12 +19,72 @@ const smooth = (v: number, a: number, b: number) => {
   return t * t * (3 - 2 * t);
 };
 
+// ---- scene A is glued to the sheet ----
+// The sheet is made of particles (WebGL); the engine exposes window.__dalaProject(x, y, z): a point in the particle
+// simulation space ((p - 0.5) * 2 * radius) -> CSS pixel, through the same matrices as the vertex shader.  The sheet in
+// bank 2 (the one the stamp lands on) is the bank 0 sheet turned about Y by DOC_TILT, the pose it has on step 2.
+const SHEET_W = 0.6; // sheet size in particle-space fractions, see scripts/generate-hero-document.py
+const SHEET_H = 0.8;
+const RADIUS = 4.35; // u_factor of the simulation
+const DOC_TILT = -0.2 * Math.PI; // same constant as in scripts/generate-hero-streams.py
+const STAMP_UV = [0.3, 0.2]; // where the imprint is centred on the sheet: from its left / bottom edge, 0..1
+const STAMP_HALF = 1.25; // half side of the imprint canvas on the sheet, particle-space units (circle ~42% of the sheet width)
+const MARK_HALF_PX = 95; // half side of the imprint canvas in CSS px (.document-stamp__mark is 190 px)
+type Project = (x: number, y: number, z: number) => [number, number] | null;
+
+// Scene B: the final sheet (bank 3, straight: the engine rotation sums to 0 at the end of the page).
+const FINAL_TILT = 0;
+const VISA_UV = [0.5, 0.62]; // centre of the visa on the sheet
+const VISA_HALF_X = 1.45; // half width of the visa on the sheet (~55% of the sheet width)
+const VISA_PX = [130, 82]; // half size of the visa canvas in CSS px (260 x 164)
+const FINAL_MARK_UV = [0.3, 0.2]; // the imprint of the stamp on the final sheet, same spot as on the earlier document
+const FINAL_MARK_HALF = 1.1;
+const FINAL_MARK_PX = 82.5; // half of the 165 px canvas
+
+// Point of the flat sheet at uv (0..1 from its left / bottom edge) plus an offset (dx right / dy up, in sheet units),
+// turned about Y by `tilt` like the sheet itself (bank 2: DOC_TILT, the pose of step 2; the final bank 3 sheet: 0).
+const sheetPoint = (uv: number[], dx: number, dy: number, tilt: number): [number, number, number] => {
+  const x = (uv[0] - 0.5) * SHEET_W * 2 * RADIUS + dx;
+  const y = (uv[1] - 0.5) * SHEET_H * 2 * RADIUS + dy;
+  return [x * Math.cos(tilt), y, x * Math.sin(tilt)];
+};
+
+// Lays `el` flat on the sheet: its centre sits at uv, half its width / height is hx / hy in sheet units, and the engine
+// projection gives the CSS matrix, so the element keeps the tilt and perspective of the sheet and follows it.  `hpx`/`hpy`
+// are the matrix basis: half the element size in CSS px when `post` centres the element itself (translate(-hpx, -hpy)),
+// or the extent of the content around the element origin when its children are already centred on it.
+// Returns false when the engine is not there (yet), the caller then keeps the plain CSS position.
+function glueToSheet(el: HTMLElement, uv: number[], hx: number, hy: number, tilt: number, hpx: number, hpy: number, post = "") {
+  const project = (window as unknown as { __dalaProject?: Project }).__dalaProject;
+  const c = project?.(...sheetPoint(uv, 0, 0, tilt));
+  const px = project?.(...sheetPoint(uv, hx, 0, tilt));
+  const py = project?.(...sheetPoint(uv, 0, hy, tilt));
+  if (!c || !px || !py) {
+    el.style.transform = "";
+    el.style.left = "";
+    el.style.top = "";
+    el.style.transformOrigin = "";
+    return false;
+  }
+  // unit vectors of the sheet in CSS px: x to the right of the sheet, y up on the sheet (CSS y points down)
+  const a = (px[0] - c[0]) / hpx;
+  const b = (px[1] - c[1]) / hpx;
+  const cc = -(py[0] - c[0]) / hpy;
+  const d = -(py[1] - c[1]) / hpy;
+  el.style.left = "0";
+  el.style.top = "0";
+  el.style.transformOrigin = "0 0";
+  el.style.transform = `matrix(${a}, ${b}, ${cc}, ${d}, ${c[0]}, ${c[1]}) ${post}`;
+  return true;
+}
+
 // ---- visa drawn as a grainy mosaic, in the same palette as the document particles ----
 const CELL = 6;
 const COLS = 54;
 const ROWS = 34;
 const hexc = (s: string): [number, number, number] => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) as [number, number, number];
 const BODY = hexc("#c8c8cc");
+const PAPER = [225, 225, 229]; // the visa body: as bright as the sheet it lies on once the engine has lit it
 const TITLE = hexc("#6a4de8");
 const TEXT = hexc("#55555b");
 const VIOLET = hexc("#7c5cff");
@@ -38,29 +98,39 @@ const FONT: Record<string, string[]> = {
   I: ["11111", "00100", "00100", "00100", "00100", "00100", "11111"],
   S: ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
   A: ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
+  D: ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
+  L: ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
 };
 
-function drawVisa(canvas: HTMLCanvasElement) {
+// ---- shared helpers for the mosaic drawings (visa, stamp and stamp imprint all use the document's squares) ----
+const clamp255 = (v: number) => Math.max(0, Math.min(255, v));
+const mix = (a: number[], b: number[], t: number) => a.map((v, i) => v * (1 - t) + b[i] * t);
+const makeRng = (seed: number) => () => {
+  seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+function prepareCanvas(canvas: HTMLCanvasElement, w: number, h: number) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.scale(dpr, dpr);
+  return ctx;
+}
+
+function drawVisa(canvas: HTMLCanvasElement) {
   const W = COLS * CELL;
   const H = ROWS * CELL;
-  canvas.width = W * dpr;
-  canvas.height = H * dpr;
-  const ctx = canvas.getContext("2d");
+  const ctx = prepareCanvas(canvas, W, H);
   if (!ctx) return;
-  ctx.scale(dpr, dpr);
-  let seed = 7;
-  const rnd = () => {
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+  const rnd = makeRng(7);
   const jit = (c: number[], a: number) => {
     const d = (rnd() - 0.5) * 2 * a;
-    return c.map((v) => Math.max(0, Math.min(255, v + d)));
+    return c.map((v) => clamp255(v + d));
   };
-  const mix = (a: number[], b: number[], t: number) => a.map((v, i) => v * (1 - t) + b[i] * t);
   const cut = 8;
   const glyph = new Set<string>();
   "VISA".split("").forEach((ch, li) => {
@@ -73,7 +143,7 @@ function drawVisa(canvas: HTMLCanvasElement) {
       const u = col - (COLS - cut);
       const v = row;
       if (u >= 0 && v < cut && u > v) continue; // cut top-right corner
-      let color: number[] = jit(BODY, 20);
+      let color: number[] = jit(PAPER, 20);
       if (u >= 0 && v < cut && v - u <= 2) color = jit(FOLD, 14); // folded flap
       else if (row <= 8) color = glyph.has(`${col},${row}`) ? jit(LIGHT, 8) : jit(TITLE, 12);
       else if (col >= 3 && col <= 15 && row >= 11 && row <= 25) {
@@ -102,38 +172,120 @@ function drawVisa(canvas: HTMLCanvasElement) {
   }
 }
 
-const STAMP_MARK = (id: string) => (
-  <svg viewBox="0 0 200 200" width="100%" height="100%">
-    <defs>
-      <path id={id} d="M 30 100 A 70 70 0 1 1 170 100 A 70 70 0 1 1 30 100" />
-    </defs>
-    <g fill="none" stroke="#2c2370" strokeWidth="6" opacity="0.9">
-      <circle cx="100" cy="100" r="88" />
-      <circle cx="100" cy="100" r="76" strokeWidth="2.5" />
-      <circle cx="100" cy="100" r="46" strokeWidth="2.5" />
-    </g>
-    <text fill="#2c2370" fontSize="15" fontWeight="700" letterSpacing="2.5" textAnchor="middle" opacity="0.9">
-      <textPath href={`#${id}`} startOffset="50%">APPROVED · DALA · APPROVED · DALA ·</textPath>
-    </text>
-    <path d="M 76 102 L 94 120 L 126 82" fill="none" stroke="#2c2370" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round" opacity="0.9" />
-  </svg>
-);
+// The stamp body (handle, collar, barrel, rubber pad) built from the same squares as the document.
+function drawStampBody(canvas: HTMLCanvasElement) {
+  const SC = 5;
+  const COLS_B = 26;
+  const ROWS_B = 34;
+  const ctx = prepareCanvas(canvas, COLS_B * SC, ROWS_B * SC);
+  if (!ctx) return;
+  const rnd = makeRng(11);
+  const jit = (c: number[], a: number) => {
+    const d = (rnd() - 0.5) * 2 * a;
+    return c.map((v) => clamp255(v + d));
+  };
+  const sx = COLS_B / 200;
+  const sy = ROWS_B / 260;
+  const inRR = (x: number, y: number, x0: number, y0: number, x1: number, y1: number, r: number) => {
+    if (x < x0 || x > x1 || y < y0 || y > y1) return false;
+    const cx = x < x0 + r ? x0 + r : x > x1 - r ? x1 - r : x;
+    const cy = y < y0 + r ? y0 + r : y > y1 - r ? y1 - r : y;
+    return Math.hypot(x - cx, y - cy) <= r;
+  };
+  type Kind = "handle" | "collar" | "body" | "pad" | null;
+  const kind = (col: number, row: number): Kind => {
+    const x = (col + 0.5) / sx;
+    const y = (row + 0.5) / sy;
+    if (inRR(x, y, 72, 0, 128, 86, 26)) return "handle";
+    if (inRR(x, y, 30, 86, 170, 108, 8)) return "collar";
+    if (inRR(x, y, 22, 108, 178, 228, 18)) return "body";
+    if (((x - 100) / 78) ** 2 + ((y - 228) / 14) ** 2 <= 1) return "pad";
+    return null;
+  };
+  const DARK = mix(TITLE, TEXT, 0.55);
+  const PAD = mix(TEXT, [0, 0, 0], 0.5);
+  for (let row = 0; row < ROWS_B; row++) {
+    for (let col = 0; col < COLS_B; col++) {
+      const k = kind(col, row);
+      if (!k) continue;
+      const x = (col + 0.5) / sx;
+      const y = (row + 0.5) / sy;
+      let color: number[];
+      if (k === "handle") {
+        const t = (x - 72) / 56;
+        color = t < 0.28 ? jit(LILAC, 10) : jit(mix(TITLE, VIOLET, t), 12);
+        if (Math.hypot(x - 112, y - 14) < 16 && rnd() < 0.55) color = jit(AMBER, 10); // glint, like the fold of the document
+      } else if (k === "collar") color = jit(LILAC, 12);
+      else if (k === "body") color = jit(x < 44 ? mix(DARK, VIOLET, 0.4) : DARK, 10);
+      else color = jit(PAD, 8);
+      if (rnd() < 0.04) color = jit(rnd() < 0.5 ? VIOLET : TEAL, 8); // violet / teal speckles
+      const edge = !kind(col - 1, row) || !kind(col + 1, row) || !kind(col, row - 1) || !kind(col, row + 1);
+      const j = edge ? 1.6 : 0.5;
+      const size = SC * (0.88 + rnd() * 0.12);
+      ctx.fillStyle = `rgb(${color[0] | 0},${color[1] | 0},${color[2] | 0})`;
+      ctx.fillRect(col * SC + (rnd() - 0.5) * j, row * SC + (rnd() - 0.5) * j, size, size);
+    }
+  }
+}
 
-const STAMP_BODY = (
-  <svg viewBox="0 0 200 260" width="100%" height="100%">
-    <rect x="72" y="0" width="56" height="86" rx="26" fill="#3a2f9a" />
-    <rect x="72" y="0" width="56" height="86" rx="26" fill="url(#stamp-shine)" />
-    <rect x="30" y="86" width="140" height="22" rx="8" fill="#5b4de0" />
-    <rect x="22" y="108" width="156" height="120" rx="18" fill="#2a2275" />
-    <ellipse cx="100" cy="228" rx="78" ry="14" fill="#14103f" />
-    <defs>
-      <linearGradient id="stamp-shine" x1="0" x2="1">
-        <stop offset="0" stopColor="#fff" stopOpacity="0.25" />
-        <stop offset="0.4" stopColor="#fff" stopOpacity="0" />
-      </linearGradient>
-    </defs>
-  </svg>
-);
+// The round "APPROVED" imprint made of squares: two rings, "DALA" in the pixel font around the band, a check in the middle.
+function drawStampMark(canvas: HTMLCanvasElement) {
+  const SC = 4;
+  const N = 50;
+  const ctx = prepareCanvas(canvas, N * SC, N * SC);
+  if (!ctx) return;
+  const rnd = makeRng(23);
+  const jit = (c: number[], a: number) => {
+    const d = (rnd() - 0.5) * 2 * a;
+    return c.map((v) => clamp255(v + d));
+  };
+  const ink: boolean[][] = Array.from({ length: N }, () => Array<boolean>(N).fill(false));
+  const c = N / 2;
+  for (let row = 0; row < N; row++) {
+    for (let col = 0; col < N; col++) {
+      const d = Math.hypot(col + 0.5 - c, row + 0.5 - c);
+      if (Math.abs(d - 22) <= 1 || Math.abs(d - 19) <= 0.55 || Math.abs(d - 11.5) <= 0.55) ink[row][col] = true;
+    }
+  }
+  // "DALA·" three times along the band between the rings, letters upright towards the outside, reading clockwise
+  const text = "DALA·DALA·DALA·";
+  const RMID = 15;
+  const theta0 = 0.14;
+  [...text].forEach((ch, slot) => {
+    const rows = ch === "·" ? ["00000", "00000", "00000", "00100", "00000", "00000", "00000"] : FONT[ch];
+    rows.forEach((line, gy) => [...line].forEach((bit, gx) => {
+      if (bit !== "1") return;
+      const theta = theta0 + (slot * 6 + gx) / RMID;
+      const r = 18 - gy;
+      const col = Math.floor(c + r * Math.sin(theta));
+      const row = Math.floor(c - r * Math.cos(theta));
+      if (col >= 0 && col < N && row >= 0 && row < N) ink[row][col] = true;
+    }));
+  });
+  // thick check mark in the middle
+  const pts: Array<[number, number]> = [[19, 25.5], [23.5, 30], [31.5, 20.5]];
+  for (let row = 0; row < N; row++) {
+    for (let col = 0; col < N; col++) {
+      const px = col + 0.5;
+      const py = row + 0.5;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [x0, y0] = pts[i];
+        const [x1, y1] = pts[i + 1];
+        const t = Math.max(0, Math.min(1, ((px - x0) * (x1 - x0) + (py - y0) * (y1 - y0)) / ((x1 - x0) ** 2 + (y1 - y0) ** 2)));
+        if (Math.hypot(px - (x0 + t * (x1 - x0)), py - (y0 + t * (y1 - y0))) <= 1.2) ink[row][col] = true;
+      }
+    }
+  }
+  for (let row = 0; row < N; row++) {
+    for (let col = 0; col < N; col++) {
+      if (!ink[row][col] || rnd() < 0.1) continue; // ~10% holes: an uneven imprint
+      const color = rnd() < 0.2 ? jit(VIOLET, 12) : jit(TITLE, 14);
+      const size = SC * (0.9 + rnd() * 0.1);
+      ctx.fillStyle = `rgb(${color[0] | 0},${color[1] | 0},${color[2] | 0})`;
+      ctx.fillRect(col * SC + (rnd() - 0.5) * 0.8, row * SC + (rnd() - 0.5) * 0.8, size, size);
+    }
+  }
+}
 
 export default function DocumentStamp() {
   const rootA = useRef<HTMLDivElement>(null);
@@ -142,9 +294,15 @@ export default function DocumentStamp() {
   const rootB = useRef<HTMLDivElement>(null);
   const markB = useRef<HTMLDivElement>(null);
   const visaB = useRef<HTMLCanvasElement>(null);
+  const bodyCanvasA = useRef<HTMLCanvasElement>(null);
+  const markCanvasA = useRef<HTMLCanvasElement>(null);
+  const markCanvasB = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     if (visaB.current) drawVisa(visaB.current);
+    if (bodyCanvasA.current) drawStampBody(bodyCanvasA.current);
+    if (markCanvasA.current) drawStampMark(markCanvasA.current);
+    if (markCanvasB.current) drawStampMark(markCanvasB.current);
     let raf = 0;
     let lastP = -1;
     let a = 0;
@@ -177,6 +335,9 @@ export default function DocumentStamp() {
         if (rootA.current) rootA.current.style.display = visible ? "block" : "none";
         lower(bodyA.current, markA.current, approach, press, lift, ink);
       }
+      // Every frame (the document keeps easing after the scroll stops): glue the stamp to its spot on the sheet, in the
+      // plane of the sheet, so it keeps the tilt of the document and travels, turns and scatters with it.
+      if (rootA.current && p > P.approach - 0.05 && p < P.scatterEnd) glueToSheet(rootA.current, STAMP_UV, STAMP_HALF, STAMP_HALF, DOC_TILT, MARK_HALF_PX, MARK_HALF_PX);
 
       // scene B (last document): imprint follows the scroll, the visa is timer-driven and rewinds
       const target = p >= END_P ? 1 : 0;
@@ -184,12 +345,18 @@ export default function DocumentStamp() {
         const step = dt / END_SECONDS;
         a = target > a ? Math.min(target, a + step) : Math.max(target, a - step);
       }
-      if (rootB.current) rootB.current.style.display = p > B.show ? "block" : "none";
+      const showB = p > B.show;
+      if (rootB.current) rootB.current.style.display = showB ? "block" : "none";
       if (markB.current) markB.current.style.opacity = String(smooth(p, B.inkStart, B.inkEnd));
-      if (visaB.current) {
-        const visaIn = smooth(a, E.visaIn, E.visaInEnd);
-        visaB.current.style.opacity = String(visaIn);
-        visaB.current.style.transform = `scale(${1.22 - 0.22 * visaIn})`;
+      if (visaB.current) visaB.current.style.opacity = String(smooth(a, E.visaIn, E.visaInEnd)); // fades in on the paper, no pop
+      if (showB && rootB.current) {
+        // both lie flat on the sheet and move with it; the matrices are in screen px, so the root sits at the screen origin
+        const glued = [
+          visaB.current && glueToSheet(visaB.current, VISA_UV, VISA_HALF_X, (VISA_HALF_X * VISA_PX[1]) / VISA_PX[0], FINAL_TILT, VISA_PX[0], VISA_PX[1], `translate(${-VISA_PX[0]}px, ${-VISA_PX[1]}px)`),
+          markB.current && glueToSheet(markB.current, FINAL_MARK_UV, FINAL_MARK_HALF, FINAL_MARK_HALF, FINAL_TILT, FINAL_MARK_PX, FINAL_MARK_PX, `rotate(-12deg) translate(${-FINAL_MARK_PX}px, ${-FINAL_MARK_PX}px)`),
+        ].every(Boolean);
+        rootB.current.style.left = glued ? "0" : "";
+        rootB.current.style.top = glued ? "0" : "";
       }
     };
     raf = requestAnimationFrame(tick);
@@ -200,21 +367,22 @@ export default function DocumentStamp() {
     <>
       <style>{`
         .document-stamp { display: none; position: fixed; width: 0; height: 0; z-index: 5; pointer-events: none; }
-        .document-stamp--a { left: 35%; top: 80%; }
+        .document-stamp--a { left: 31%; top: 80%; }
         .document-stamp--b { left: 47%; top: 37.5%; }
         .document-stamp__mark { position: absolute; width: 190px; height: 190px; left: -95px; top: -95px; opacity: 0; transform: rotate(-12deg); mix-blend-mode: multiply; }
         .document-stamp__body { position: absolute; width: 130px; height: 169px; left: -65px; top: -150px; opacity: 0; transform-origin: 50% 100%; filter: drop-shadow(0 14px 18px rgba(0,0,0,.45)); }
         .document-stamp--b .document-stamp__mark { width: 165px; height: 165px; left: -133px; top: 103px; }
-        .document-stamp__visa { position: absolute; width: 260px; height: 164px; left: -130px; top: -82px; opacity: 0; filter: drop-shadow(0 0 18px rgba(255,255,255,.22)) drop-shadow(0 12px 22px rgba(0,0,0,.45)); }
+        .document-stamp__mark canvas, .document-stamp__body canvas { display: block; width: 100%; height: 100%; }
+        .document-stamp__visa { position: absolute; width: 260px; height: 164px; left: -130px; top: -82px; opacity: 0; }
         @media (max-width: 1023px) { .document-stamp--a { left: 50%; top: 62%; } .document-stamp--b { left: 50%; top: 40%; } }
       `}</style>
       <div ref={rootA} className="document-stamp document-stamp--a" aria-hidden="true">
-        <div ref={markA} className="document-stamp__mark">{STAMP_MARK("stamp-arc-a")}</div>
-        <div ref={bodyA} className="document-stamp__body">{STAMP_BODY}</div>
+        <div ref={markA} className="document-stamp__mark"><canvas ref={markCanvasA} /></div>
+        <div ref={bodyA} className="document-stamp__body"><canvas ref={bodyCanvasA} /></div>
       </div>
       <div ref={rootB} className="document-stamp document-stamp--b" aria-hidden="true">
         <canvas ref={visaB} className="document-stamp__visa" />
-        <div ref={markB} className="document-stamp__mark">{STAMP_MARK("stamp-arc-b")}</div>
+        <div ref={markB} className="document-stamp__mark"><canvas ref={markCanvasB} /></div>
       </div>
     </>
   );

@@ -4455,6 +4455,49 @@ ${e.fragmentShader}`;
     });
     this._mesh.customDepthMaterial = this._depthMaterial;
     this.add(this._mesh);
+    // Lets DOM overlays (the stamp) stay glued to the document: maps a point given in the simulation space of the
+    // particles (p - 0.5) * 2 * radius to a CSS pixel, with the same matrices as the vertex shader (tn):
+    // modelView with u_offset added, times Rx * Ry * Rz of u_rotation, times the projection of the particle camera.
+    window.__dalaProject = (px, py, pz) => {
+      const cam = u.WebGL && u.WebGL.particleCamera;
+      if (!cam || !this._mesh) return null;
+      const mul = (a, b) => {
+        const o = new Array(16);
+        for (let c = 0; c < 4; c++) {
+          for (let r = 0; r < 4; r++) {
+            let s = 0;
+            for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k];
+            o[c * 4 + r] = s;
+          }
+        }
+        return o;
+      };
+      const rot = (ax, ay, az, ang) => {
+        const l = Math.hypot(ax, ay, az);
+        ax /= l; ay /= l; az /= l;
+        const s = Math.sin(ang);
+        const c = Math.cos(ang);
+        const oc = 1 - c;
+        return [oc * ax * ax + c, oc * ax * ay - az * s, oc * az * ax + ay * s, 0,
+                oc * ax * ay + az * s, oc * ay * ay + c, oc * ay * az - ax * s, 0,
+                oc * az * ax - ay * s, oc * ay * az + ax * s, oc * az * az + c, 0,
+                0, 0, 0, 1];
+      };
+      const off = this._material.customUniforms[12].value;
+      const ang = this._material.customUniforms[15].value;
+      const mv = Array.from(this._mesh.modelViewMatrix.elements);
+      mv[12] += off.x;
+      mv[13] += off.y;
+      const m = mul(mul(mul(mv, rot(1, 0, 0, ang.x)), rot(0, 1, 0, ang.y)), rot(0, 0, 1, ang.z));
+      const v = [px, py, pz, 1];
+      const view = [0, 0, 0, 0];
+      for (let r = 0; r < 4; r++) view[r] = m[r] * v[0] + m[4 + r] * v[1] + m[8 + r] * v[2] + m[12 + r] * v[3];
+      const pe = cam.projectionMatrix.elements;
+      const clip = [0, 0, 0, 0];
+      for (let r = 0; r < 4; r++) clip[r] = pe[r] * view[0] + pe[4 + r] * view[1] + pe[8 + r] * view[2] + pe[12 + r] * view[3];
+      if (!(clip[3] > 0)) return null;
+      return [(clip[0] / clip[3] * 0.5 + 0.5) * window.innerWidth, (1 - (clip[1] / clip[3] * 0.5 + 0.5)) * window.innerHeight];
+    };
   }
   activate({
     delay: e = 0
