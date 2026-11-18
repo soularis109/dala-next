@@ -4669,7 +4669,7 @@ ${e.fragmentShader}`;
   }
   _updateRotation() {
     const e = u.sectionProgress;
-    const t = zt(Ut(e, 0, 1, 0, -Math.PI * 0.2), -Math.PI * 0.2, 0) + zt(Ut(e, 2.7, 3, 0, Math.PI * 0.2), 0, Math.PI * 0.2) + zt(Ut(e, 4.5, 5, 0, Math.PI * 0.25), 0, Math.PI * 0.25) - zt(Ut(e, 4.5, 5, 0, Math.PI * 1.25), 0, Math.PI * 1.25) + zt(Ut(e, 5.7, this.royYEnd, 0, Math.PI), 0, Math.PI);
+    const t = zt(Ut(e, 0, 1, 0, -Math.PI * 0.2), -Math.PI * 0.2, 0) - zt(Ut(e, 2.3, 2.6, 0, Math.PI * 2), 0, Math.PI * 2) + zt(Ut(e, 2.7, 3, 0, Math.PI * 0.2), 0, Math.PI * 0.2) + zt(Ut(e, 4.5, 5, 0, Math.PI * 0.25), 0, Math.PI * 0.25) - zt(Ut(e, 4.5, 5, 0, Math.PI * 1.25), 0, Math.PI * 1.25) + zt(Ut(e, 5.7, this.royYEnd, 0, Math.PI), 0, Math.PI);
     const n = zt(Ut(e, 2.7, 3, 0, 0), 0, 0) + 0;
     this._material.customUniforms[15].value.x += (0 - this._material.customUniforms[15].value.x) * (this._easing * 0.75);
     this._material.customUniforms[15].value.y += (t - this._material.customUniforms[15].value.y) * (this._easing * 0.75);
@@ -4692,15 +4692,15 @@ ${e.fragmentShader}`;
     this._depthMaterial.customUniforms.u_delta.value.y += (this._mDelta.y - this._depthMaterial.customUniforms.u_delta.value.y) * (this._easing * 0.75);
   }
   _updateSway(e, t) {
-    // Drift direction per block while exploded: Introduction -> right, manifesto pair 1 -> left, pair 2 -> right.
-    // Eased between blocks; faded out before the streams form (p 2.7) so the baked stream layout stays exact.
+    // Drift of the scattered cloud: right on p 1.1-1.5, left on 1.5-2.1; faded out before the cloud makes its
+    // full turn (p 2.3-2.6) and folds into the streams (2.7-3), so the baked stream layout stays exact.
     const n = (a, b, c) => {
       const d = Math.min(1, Math.max(0, (c - a) / (b - a)));
       return d * d * (3 - 2 * d);
     };
     const i = t ? 1.5 : 1.1;
-    const env = n(i, i + 0.3, e) * (1 - n(2.45, 2.7, e));
-    const dir = 1 - 2 * n(1.9, 2.1, e) + 2 * n(2.25, 2.45, e);
+    const env = n(i, i + 0.3, e) * (1 - n(2.1, 2.3, e));
+    const dir = 1 - 2 * n(1.4, 1.6, e);
     const x = (t ? 0.5 : 1.2) * env * dir;
     const y = (t ? 0.1 : 0.25) * env * -dir;
     const sw = this._simulationSpring.material.uniforms.u_sway.value;
@@ -4718,7 +4718,7 @@ ${e.fragmentShader}`;
     this._material.customUniforms[13].value += (i - this._material.customUniforms[13].value) * this._easing;
     this._simulationPos.material.uniforms.u_explode.value += (i - this._simulationPos.material.uniforms.u_explode.value) * this._easing;
     this._simulationSpring.material.uniforms.u_explode.value += (i - this._simulationSpring.material.uniforms.u_explode.value) * this._easing;
-    const r = this._factor + zt(Ut(e, 4.5, 5, 0, 0.3), 0, 0.3) - zt(Ut(e, 5.7, 6, 0, 1), 0, 1);
+    const r = this._factor + zt(Ut(e, 2.3, 2.6, 0, 0.3), 0, 0.3) - zt(Ut(e, 2.55, 2.7, 0, 0.3), 0, 0.3) + zt(Ut(e, 4.5, 5, 0, 0.3), 0, 0.3) - zt(Ut(e, 5.7, 6, 0, 1), 0, 1);
     this._material.customUniforms[3].value += (r - this._material.customUniforms[3].value) * this._easing;
     this._simulationPos.material.uniforms.u_factor.value += (r - this._simulationPos.material.uniforms.u_factor.value) * this._easing;
     this._simulationSpring.material.uniforms.u_factor.value += (r - this._simulationPos.material.uniforms.u_factor.value) * this._easing;
