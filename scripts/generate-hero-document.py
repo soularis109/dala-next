@@ -1,8 +1,9 @@
 """Replace bank 0 (the brain) of the particle atlas with a grainy mosaic document sheet.
 
-Look: portrait sheet (~3:4) with a cut/folded top-right corner and an amber glint,
-a purple title bar, four dark text rows, ~4% purple/teal
-speckles and a few small decorative squares outside the sheet.
+Look: portrait ivory sheet (~3:4) with a cut/folded top-right corner and a champagne glint,
+a navy title bar, four navy text rows and ~4% navy/champagne speckles (brand palette).
+The title bar, rows and speckles carry a fill threshold (scale texture, green channel): the engine shows
+them only as u_fill passes it, so the sheet is filled with data while the page scrolls.
 
 Banks 1-3 (bulb, globe, finale) are copied unchanged from the original atlas.
 The originals (pos-33.exr, cd-33.png, sc-33.png) are only read; new files are
@@ -27,9 +28,12 @@ def hexc(s):
     return tuple(int(s[i:i + 2], 16) for i in (1, 3, 5))
 
 
-BODY, TITLE, TEXT = hexc('#c8c8cc'), hexc('#6a4de8'), hexc('#55555b')
-VIOLET, TEAL, AMBER, LILAC = hexc('#7c5cff'), hexc('#2fbf9f'), hexc('#e8a13a'), hexc('#c9b6ff')
-FOLD = (150, 150, 156)
+# Brand palette (public/css/style.css :root): deep navy #041E42, champagne #D6BE93, ivory #F6F2E9 - the same colours as
+# the small documents floating around the sheet, so the sheet and its "data" read as one design.
+# The engine draws the texture colour as is on black, so the ivory body is toned down to the brightness the old grey had.
+BODY, TITLE, TEXT = hexc('#d2cdc2'), hexc('#0b2a58'), hexc('#1d3a66')
+VIOLET, TEAL, AMBER, LILAC = hexc('#0b2a58'), hexc('#d6be93'), hexc('#d6be93'), hexc('#f6f2e9')
+FOLD = (176, 164, 140)
 
 
 def clamp(v):
@@ -72,8 +76,23 @@ ROW_H = 0.035
 RAYS = [i * math.tau / 10 + 0.2 for i in range(10)]
 
 
+# Fill order (green channel of the scale texture, blue = field flag; read by the engine as the threshold of u_fill): while the page
+# scrolls the blank sheet is "filled with data" - first the title bar, then the four text rows, each typed from left
+# to right.  0 = the sheet itself, always shown; rows go from FILL_START to 1 in this order.
+FILL_START = 0.06
+FILL_SLOTS = 5                                     # title bar + 4 rows
+
+
+def fill_threshold(u, slot, u0, u1):
+    a = FILL_START + (1 - FILL_START) * slot / FILL_SLOTS
+    b = FILL_START + (1 - FILL_START) * (slot + 0.85) / FILL_SLOTS
+    f = max(0.0, min(1.0, (u - u0) / (u1 - u0)))
+    return a + (b - a) * f
+
+
 def place(i, cell):
-    """Return (x, y, z, color, scale) for one sheet cell, or None for cells removed by the cut."""
+    """Return (x, y, z, color, scale, fill, field) for one sheet cell: fill = threshold of u_fill above which the final
+    colour shows, field = 1 for title bar / rows (blank state champagne), 0 for the rest (blank state ivory sheet)."""
     u, v = ((cell % 100 + .5) / 100, (cell // 100 + .5) / 100)
     a = (u - FOLD_U) / (1 - FOLD_U)
     c = (v - FOLD_V) / (1 - FOLD_V)
@@ -90,15 +109,22 @@ def place(i, cell):
     py += rng.uniform(-jit, jit)
 
     scale = BASE_SCALE
-    color = jitter(BODY, 20)
+    # Blank state of the page start: the ivory sheet is there at once, its fields (title bar, rows) are champagne and
+    # turn navy as they are filled.
+    fill = 0.0
+    field = 0
+    color = jitter(BODY, 14)
     if inside_corner:
-        color = jitter(FOLD, 14)
+        color = jitter(FOLD, 12)
+        fill = 0.0                                   # the folded corner is there from the start
     elif TITLE_BOX[0] < u < TITLE_BOX[1] and TITLE_BOX[2] < v < TITLE_BOX[3]:
-        color = jitter(TITLE, 12)
+        color = jitter(TITLE, 10)
+        fill, field = fill_threshold(u, 0, TITLE_BOX[0], TITLE_BOX[1]), 1
     else:
-        for row in ROWS:
+        for k, row in enumerate(ROWS):
             if 0.10 < u < 0.90 and abs(v - row) < ROW_H / 2:
-                color = mix(jitter(BODY, 20), jitter(TEXT, 8), 0.85)
+                color = mix(jitter(BODY, 14), jitter(TEXT, 8), 0.85)
+                fill, field = fill_threshold(u, k + 1, 0.10, 0.90), 1
                 break
 
     # Amber glint on the fold: bright core plus thin rays.
@@ -110,15 +136,17 @@ def place(i, cell):
         elif any(abs(math.sin(math.atan2(rv, ru * 0.75) - ang)) * dist < 0.006 and
                  math.cos(math.atan2(rv, ru * 0.75) - ang) > 0 for ang in RAYS):
             color = jitter(AMBER, 10)
+            fill, field = 0.0, 0                     # glint rays are champagne from the start
 
     # ~4% speckles in violet / teal, slightly bigger than the rest.
     if rng.random() < 0.04:
         color = jitter(VIOLET if rng.random() < 0.5 else TEAL, 8)
         scale = BASE_SCALE * 1.25
+        fill = max(fill, rng.uniform(FILL_START, 1.0))      # the specks are data too: they appear while the sheet fills
 
     x = 0.5 + (px - .5) * SHEET_W
     y = 0.5 + (py - .5) * SHEET_H
-    return x, y, 0.5 + z, color, scale
+    return x, y, 0.5 + z, color, scale, max(0.0, fill), field
 
 
 # Decorative squares outside the sheet: (cx, cy, colour, count).
@@ -131,19 +159,19 @@ for cx, cy, col, n in DECOR_CLUSTERS:
     for k in range(n):
         ang, rad = rng.uniform(0, math.tau), 0.02 * math.sqrt(rng.random())
         decor.append((cx + math.cos(ang) * rad, cy + math.sin(ang) * rad * 1.3, 0.5 + rng.uniform(-.02, .02),
-                      jitter(col, 10), BASE_SCALE * rng.uniform(0.9, 1.3)))
+                      jitter(col, 10), BASE_SCALE * rng.uniform(0.9, 1.3), 0.0, 0))
 decor = []   # the molecule-like clusters of tiny documents next to the sheet are switched off (the loop above still runs so the rng sequence of the sheet is unchanged)
 
 for i in range(COUNT):
     j = (i // 100) * 200 + i % 100          # bank 0 pixel for particle i
     if i < len(decor):
-        x, y, z, color, scale = decor[i]    # first indices -> also present on mobile (first 7000)
+        x, y, z, color, scale, fill, field = decor[i]    # first indices -> also present on mobile (first 7000)
     else:
         # Coprime permutation: the first 7000 particles (mobile) still cover the whole sheet.
-        x, y, z, color, scale = place(i, (i * 7919) % COUNT)
+        x, y, z, color, scale, fill, field = place(i, (i * 7919) % COUNT)
     r[j], g[j], b[j] = x, y, z
     colors[j * 3:j * 3 + 3] = bytes(color)
-    scales[j * 3:j * 3 + 3] = bytes([clamp(scale)] * 3)
+    scales[j * 3:j * 3 + 3] = bytes([clamp(scale), clamp(fill * 255), 255 if field else 0])   # R = scale, G = fill threshold, B = field flag
 
 # Bank 3 (shown after the streams, on the left with the stamp) is the same sheet, particle for particle.
 for i in range(COUNT):
@@ -151,7 +179,7 @@ for i in range(COUNT):
     k = j + 20100
     r[k], g[k], b[k] = r[j], g[j], b[j]
     colors[k * 3:k * 3 + 3] = colors[j * 3:j * 3 + 3]
-    scales[k * 3:k * 3 + 3] = scales[j * 3:j * 3 + 3]
+    scales[k * 3:k * 3 + 3] = bytes([scales[j * 3], 0, 0])    # the final sheet is already filled
 
 # Uncompressed float EXR so the bundled decoder reads it exactly.
 planes = struct.pack('<120000f', *(g + b + r))

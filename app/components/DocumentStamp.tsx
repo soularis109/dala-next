@@ -83,16 +83,17 @@ const CELL = 6;
 const COLS = 54;
 const ROWS = 34;
 const hexc = (s: string): [number, number, number] => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16)) as [number, number, number];
-const BODY = hexc("#c8c8cc");
-const PAPER = [225, 225, 229]; // the visa body: as bright as the sheet it lies on once the engine has lit it
-const TITLE = hexc("#6a4de8");
-const TEXT = hexc("#55555b");
-const VIOLET = hexc("#7c5cff");
-const TEAL = hexc("#2fbf9f");
-const AMBER = hexc("#e8a13a");
-const LILAC = hexc("#c9b6ff");
-const FOLD: [number, number, number] = [150, 150, 156];
-const LIGHT = hexc("#ececf0");
+// Brand palette, same as the document sheet (scripts/generate-hero-document.py): navy / champagne / ivory.
+const BODY = hexc("#d2cdc2");
+const PAPER = [240, 236, 226]; // the visa body: as bright as the sheet it lies on once the engine has lit it
+const TITLE = hexc("#0b2a58");
+const TEXT = hexc("#1d3a66");
+const VIOLET = hexc("#0b2a58");
+const TEAL = hexc("#d6be93");
+const AMBER = hexc("#d6be93");
+const LILAC = hexc("#f6f2e9");
+const FOLD: [number, number, number] = [176, 164, 140];
+const LIGHT = hexc("#f6f2e9");
 const FONT: Record<string, string[]> = {
   V: ["10001", "10001", "10001", "10001", "10001", "01010", "00100"],
   I: ["11111", "00100", "00100", "00100", "00100", "00100", "11111"],

@@ -41,9 +41,9 @@ RADIUS = 4.35                   # u_factor of the simulation at this step
 GROUP = (-2.5, 0.5)             # basePosition on this step (desktop _updatePosition)
 Y_SHIFT = 0.26                  # measured with a marker grid: the engine draws this step 0.26 half-heights lower
 
-WHITE_TARGET = (240, 240, 244)  # sheet white the document body is lifted to
-INK_LIFT = (118, 118, 126)      # dark text rows are lifted so they stay visible on black
-HAZE = (216, 216, 222)          # pale grey-white of the far, blurred bundles on the left
+WHITE_TARGET = (246, 242, 233)  # ivory (#F6F2E9) the document body is lifted to
+INK_LIFT = (78, 104, 150)       # navy rows / specks (#041E42) are lifted so they stay visible on black
+HAZE = (222, 218, 208)          # pale ivory haze of the far, blurred bundles on the left
 
 X0, X1 = -0.42, 1.95            # screen x range of the composition (past the right edge at 16:9)
 DEPTH = (-2.6, 2.8)             # z at X0 / X1: far on the left (still visible: alpha is smoothstep(-4.5, 4, z)), near on the right
@@ -187,20 +187,28 @@ scales = bytearray(decode('hero-document-scales.png', 'rgb24'))
 
 # Bank 0 colours are read BEFORE banks 1/2 are overwritten, so a re-run samples the real document, not itself.
 doc_colors = [tuple(colors[((c // 100) * 200 + c % 100) * 3:((c // 100) * 200 + c % 100) * 3 + 3]) for c in range(COUNT)]
-ACCENTS = [c for c in doc_colors if max(c) - min(c) >= 28]      # the document's own amber / violet / teal pixels
+def is_ink(c):
+    return max(c) < 140                                         # navy title bar, text rows and specks
+
+
+def lift_ink(c):
+    return mix(c, INK_LIFT, 0.65)
+
+
+# The document's own accents: champagne glint / specks as they are, navy ink lifted so it shows on black.
+ACCENTS = [lift_ink(c) if is_ink(c) else c for c in doc_colors if max(c) - min(c) >= 28]
 preview = []
 clipped, lo, hi = 0, [9.0] * 3, [-9.0] * 3      # bake range check: x, y, z in the EXR must stay in [0, 1]
 
 
 def doc_colour(i):
-    """Colour of a real document cell: the grey body is lifted to sheet white, ink is kept (lifted), accents untouched."""
+    """Colour of a real document cell: the ivory body is lifted to sheet white, navy ink is lifted, champagne untouched."""
     c = doc_colors[(i * 7919) % COUNT]
-    lo, hi = min(c), max(c)
-    if hi - lo < 28:                                    # neutral: body, fold or text row
-        if hi >= 140:                                   # body (~#c8c8cc) -> sheet white
-            return mix(c, WHITE_TARGET, 0.8)
-        return mix(c, INK_LIFT, 0.65)                   # dark text row
-    return c                                            # purple title, teal / amber specks, lilac
+    if is_ink(c):                                       # navy title bar, text rows, specks
+        return lift_ink(c)
+    if max(c) - min(c) < 28:                            # ivory body / fold -> sheet white
+        return mix(c, WHITE_TARGET, 0.8)
+    return c                                            # champagne glint and specks
 
 
 def colour_at(i, fx):

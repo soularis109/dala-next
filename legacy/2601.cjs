@@ -4255,6 +4255,11 @@ class an extends Re.T {
         id: "u_mobileRotation",
         type: "float",
         value: Math.PI * 1
+      }, {
+        // 0..1: how far the first sheet is filled with data (index 24, see _updateFill)
+        id: "u_fill",
+        type: "float",
+        value: 0
       }],
       onBeforeCompile: function (e) {
         for (let t = 0; t < this._customUniforms.length; t++) {
@@ -4282,7 +4287,7 @@ ${e.fragmentShader}`;
         e.fragmentShader = "varying vec3 v_pos;\n" + e.fragmentShader;
         e.fragmentShader = "varying vec2 v_id;\n" + e.fragmentShader;
         e.fragmentShader = "varying float v_hover;\n" + e.fragmentShader;
-        e.fragmentShader = e.fragmentShader.replace("#include <output_fragment>", "#define GLSLIFY 1\nvec3 col = texture2D(t_color, v_id).xyz;\nvec3 col2 = texture2D(t_color, vec2(v_id.x + 0.5, v_id.y)).xyz;\nvec3 col3 = texture2D(t_color, vec2(v_id.x, v_id.y + 0.5)).xyz;\nvec3 col4 = texture2D(t_color, vec2(v_id.x + 0.5, v_id.y + 0.5)).xyz;\ncol = mix(col, col2, u_progress);\ncol = mix(col, col3, max(0., u_progress - 1.));\ncol = mix(col, col4, max(0., u_progress - 2.));\n// col += v_hover * 0.5;\ncol = mix(col, vec3(0.45), max(0., v_hover - u_explode) * abs( u_explode - 1.));\n\n#ifdef OPAQUE\ndiffuseColor.a = 1.0;\n#endif\n// https://github.com/mrdoob/three.js/pull/22425\n#ifdef USE_TRANSMISSION\ndiffuseColor.a *= transmissionAlpha + 0.1;\n#endif\noutgoingLight.rgb = col.rgb * u_colorFactor;\n// outgoingLight.rgb = vec3(smoothstep(-7., 5., v_pos.z));\n// outgoingLight.rgb = vec3(step(1., v_pos.y / (u_resolution.y * 0.5)));\n// outgoingLight.rgb = vec3(v_pos.x / (u_resolution.x * 0.5));\n// outgoingLight.rgb = vec3(v_pos.y / (u_resolution.y * 0.5));\n// float alpha = diffuseColor.a * mix(smoothstep(-8., 5., v_pos.z), 1., u_explode);\nfloat edgeFade = mix(1., smoothstep(-1.6, -1.2, v_pos.x / (u_resolution.x * 0.5)), smoothstep(0.5, 1., u_progress) * (1. - smoothstep(2.2, 2.8, u_progress)));\nfloat alpha = diffuseColor.a * smoothstep(-4.5, 4., v_pos.z) * edgeFade;\ngl_FragColor = vec4( outgoingLight, alpha );");
+        e.fragmentShader = e.fragmentShader.replace("#include <output_fragment>", "#define GLSLIFY 1\nvec3 col = texture2D(t_color, v_id).xyz;\n// fill: the title bar / rows / specks of the first sheet appear as u_fill passes their threshold (scale texture, green)\nfloat fillTh = texture2D(t_scale, v_id).y;\nfloat fillGrain = fract(sin(dot(v_id, vec2(12.9898, 78.233))) * 43758.5453);\nfloat fillField = step(0.5, texture2D(t_scale, v_id).z);\nvec3 fillBlank = mix(vec3(0.824, 0.804, 0.761) * (0.94 + 0.1 * fillGrain), vec3(0.839, 0.745, 0.576), fillField);\ncol = mix(fillBlank, col, smoothstep(fillTh - 0.04, fillTh, u_fill));\nvec3 col2 = texture2D(t_color, vec2(v_id.x + 0.5, v_id.y)).xyz;\nvec3 col3 = texture2D(t_color, vec2(v_id.x, v_id.y + 0.5)).xyz;\nvec3 col4 = texture2D(t_color, vec2(v_id.x + 0.5, v_id.y + 0.5)).xyz;\ncol = mix(col, col2, u_progress);\ncol = mix(col, col3, max(0., u_progress - 1.));\ncol = mix(col, col4, max(0., u_progress - 2.));\n// col += v_hover * 0.5;\ncol = mix(col, vec3(0.45), max(0., v_hover - u_explode) * abs( u_explode - 1.));\n\n#ifdef OPAQUE\ndiffuseColor.a = 1.0;\n#endif\n// https://github.com/mrdoob/three.js/pull/22425\n#ifdef USE_TRANSMISSION\ndiffuseColor.a *= transmissionAlpha + 0.1;\n#endif\noutgoingLight.rgb = col.rgb * u_colorFactor;\n// outgoingLight.rgb = vec3(smoothstep(-7., 5., v_pos.z));\n// outgoingLight.rgb = vec3(step(1., v_pos.y / (u_resolution.y * 0.5)));\n// outgoingLight.rgb = vec3(v_pos.x / (u_resolution.x * 0.5));\n// outgoingLight.rgb = vec3(v_pos.y / (u_resolution.y * 0.5));\n// float alpha = diffuseColor.a * mix(smoothstep(-8., 5., v_pos.z), 1., u_explode);\nfloat edgeFade = mix(1., smoothstep(-1.6, -1.2, v_pos.x / (u_resolution.x * 0.5)), smoothstep(0.5, 1., u_progress) * (1. - smoothstep(2.2, 2.8, u_progress)));\nfloat alpha = diffuseColor.a * smoothstep(-4.5, 4., v_pos.z) * edgeFade;\ngl_FragColor = vec4( outgoingLight, alpha );");
       }
     });
     this._material.customUniforms[0].value = u.WebGL.assets.textures.cone_position_exr;
@@ -4688,29 +4693,39 @@ ${e.fragmentShader}`;
     this._depthMaterial.customUniforms.u_delta.value.y += (this._mDelta.y - this._depthMaterial.customUniforms.u_delta.value.y) * (this._easing * 0.75);
   }
   _updateSway(e, t) {
-    // Drift of the scattered cloud: right on p 1.1-1.5, left on 1.5-2.1; faded out before the cloud makes its
+    // Drift of the scattered cloud: right on p 1.6-2.0, left on 1.9-2.1; faded out before the cloud makes its
     // full turn (p 2.3-2.6) and folds into the streams (2.7-3), so the baked stream layout stays exact.
+    // The sheet stays whole and still until the intro text has scrolled away (p ~1.6) and it is filled with data.
     const n = (a, b, c) => {
       const d = Math.min(1, Math.max(0, (c - a) / (b - a)));
       return d * d * (3 - 2 * d);
     };
-    const i = t ? 1.5 : 1.1;
+    const i = t ? 1.7 : 1.6;
     const env = n(i, i + 0.3, e) * (1 - n(2.1, 2.3, e));
-    const dir = 1 - 2 * n(1.4, 1.6, e);
+    const dir = 1 - 2 * n(1.85, 2.05, e);
     const x = (t ? 0.5 : 1.2) * env * dir;
     const y = (t ? 0.1 : 0.25) * env * -dir;
     const sw = this._simulationSpring.material.uniforms.u_sway.value;
     sw.x += (x - sw.x) * this._easing;
     sw.y += (y - sw.y) * this._easing;
   }
+  // The first sheet is filled with data (title bar, rows, specks) while the intro text scrolls by (p 0.7-1.5).
+  _updateFill(e) {
+    const d = Math.min(1, Math.max(0, (e - 0.7) / 0.8));
+    const f = d * d * (3 - 2 * d);
+    const c = this._material.customUniforms[24];
+    c.value += (f - c.value) * this._easing;
+  }
   _updatePosition() {
     const e = u.sectionProgress;
     this._updateSway(e, false);
-    const t = zt(Ut(e, 0, 1, 3, -3), -3, 3) + zt(Ut(e, 1.25, 1.5, 0.905, 3.5), 0.905, 3.5) - zt(Ut(e, 2.8, 3, 0.905, 3), 0.905, 3) + zt(Ut(e, 4.5, 5, 0.905, 6), 0.905, 6) - zt(Ut(e, 4.5, 5, 0.905, 5), 0.905, 4);
+    this._updateFill(e);
+    const t = zt(Ut(e, 0, 1, 3, -3), -3, 3) + zt(Ut(e, 1.65, 2, 0.905, 3.5), 0.905, 3.5) - zt(Ut(e, 2.8, 3, 0.905, 3), 0.905, 3) + zt(Ut(e, 4.5, 5, 0.905, 6), 0.905, 6) - zt(Ut(e, 4.5, 5, 0.905, 5), 0.905, 4);
     this._params.basePosition.x = t + this._material.customUniforms[10].value.x * 0;
     const n = zt(Ut(e, 2.7, 3, 0, 0.5), 0, 0.5) - zt(Ut(e, 4.5, 5, 0, 0.5), 0, 0.5) + zt(Ut(e, 5.7, 6, 0, 1.75), 0, 1.75);
     this._params.basePosition.y = n + this._material.customUniforms[10].value.y * 0;
-    const i = zt(Ut(e, 1.1, 2.2, 0, 1), 0, 1) - zt(Ut(e, 2.8, 3, 0, 1), 0, 1) + zt(Ut(e, 4.5, 5, 0, 1), 0, 1) - zt(Ut(e, 5.7, 6, 0, 1), 0, 1);
+    const ex = Math.min(1, Math.max(0, (e - 1.6) / 0.7));
+    const i = ex * ex * (3 - 2 * ex) - zt(Ut(e, 2.8, 3, 0, 1), 0, 1) + zt(Ut(e, 4.5, 5, 0, 1), 0, 1) - zt(Ut(e, 5.7, 6, 0, 1), 0, 1);
     this._material.customUniforms[13].value += (i - this._material.customUniforms[13].value) * this._easing;
     this._simulationPos.material.uniforms.u_explode.value += (i - this._simulationPos.material.uniforms.u_explode.value) * this._easing;
     this._simulationSpring.material.uniforms.u_explode.value += (i - this._simulationSpring.material.uniforms.u_explode.value) * this._easing;
@@ -4733,10 +4748,12 @@ ${e.fragmentShader}`;
   _updateMobilePosition() {
     const e = u.sectionProgress;
     this._updateSway(e, true);
+    this._updateFill(e);
     const t = zt(Ut(e, 0, 1, 1.5, 0), 0, 1.5) + zt(Ut(e, 1.25, 1.5, 0, 0), 0, 0) - zt(Ut(e, 2.8, 3, 0, 0), 0, 0) + zt(Ut(e, 3.3, 3.5, 0, 0), 0, 0) - zt(Ut(e, 4.5, 5, 0, 0), 0, 0);
     this._params.basePosition.x = t + this._material.customUniforms[10].value.x * 0.052;
     this._params.basePosition.y = 2 + this._material.customUniforms[10].value.y * 0;
-    const n = zt(Ut(e, 1.4, 1.7, 0, 1), 0, 1) - zt(Ut(e, 2.7, 3, 0, 1), 0, 1) + zt(Ut(e, 4.5, 5, 0, 1), 0, 1) - zt(Ut(e, 5.7, 5.8, 0, 1), 0, 1);
+    const ex = Math.min(1, Math.max(0, (e - 1.65) / 0.65));
+    const n = ex * ex * (3 - 2 * ex) - zt(Ut(e, 2.7, 3, 0, 1), 0, 1) + zt(Ut(e, 4.5, 5, 0, 1), 0, 1) - zt(Ut(e, 5.7, 5.8, 0, 1), 0, 1);
     this._material.customUniforms[13].value += (n - this._material.customUniforms[13].value) * this._easing;
     this._simulationPos.material.uniforms.u_explode.value += (n - this._simulationPos.material.uniforms.u_explode.value) * this._easing;
     this._simulationSpring.material.uniforms.u_explode.value += (n - this._simulationSpring.material.uniforms.u_explode.value) * this._easing;
