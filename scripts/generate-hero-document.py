@@ -1,7 +1,7 @@
 """Replace bank 0 (the brain) of the particle atlas with a grainy mosaic document sheet.
 
 Look: portrait sheet (~3:4) with a cut/folded top-right corner and an amber glint,
-a purple title bar, four dark text rows, a soft blurred patch bottom-left, ~4% purple/teal
+a purple title bar, four dark text rows, ~4% purple/teal
 speckles and a few small decorative squares outside the sheet.
 
 Banks 1-3 (bulb, globe, finale) are copied unchanged from the original atlas.
@@ -69,7 +69,6 @@ CORNER = (0.89, 0.92)                              # centre of the folded corner
 TITLE_BOX = (0.10, 0.65, 0.82, 0.88)               # u0, u1, v0, v1  (55% of the width)
 ROWS = [0.68, 0.58, 0.48, 0.38]                    # text row centres
 ROW_H = 0.035
-PATCH = (0.27, 0.43, 0.13, 0.11)                   # blurred patch: cu, cv, ru, rv
 RAYS = [i * math.tau / 10 + 0.2 for i in range(10)]
 
 
@@ -102,17 +101,6 @@ def place(i, cell):
                 color = mix(jitter(BODY, 20), jitter(TEXT, 8), 0.85)
                 break
 
-    # Blurred, half-transparent-looking patch: bigger, paler particles that drift off the page plane.
-    du, dv = (u - PATCH[0]) / PATCH[2], (v - PATCH[1]) / PATCH[3]
-    d = du * du + dv * dv
-    if d < 1:
-        t = 1 - d
-        color = mix(color, (236, 236, 240), 0.6 * t)
-        scale = BASE_SCALE * (1 + 0.9 * t)
-        z += rng.uniform(-0.035, 0.035) * t
-        px += rng.uniform(-0.01, 0.01) * t
-        py += rng.uniform(-0.01, 0.01) * t
-
     # Amber glint on the fold: bright core plus thin rays.
     ru, rv = (u - CORNER[0]), (v - CORNER[1])
     dist = math.hypot(ru * 0.75, rv)
@@ -144,7 +132,7 @@ for cx, cy, col, n in DECOR_CLUSTERS:
         ang, rad = rng.uniform(0, math.tau), 0.02 * math.sqrt(rng.random())
         decor.append((cx + math.cos(ang) * rad, cy + math.sin(ang) * rad * 1.3, 0.5 + rng.uniform(-.02, .02),
                       jitter(col, 10), BASE_SCALE * rng.uniform(0.9, 1.3)))
-decor = decor[:DECOR]
+decor = []   # the molecule-like clusters of tiny documents next to the sheet are switched off (the loop above still runs so the rng sequence of the sheet is unchanged)
 
 for i in range(COUNT):
     j = (i // 100) * 200 + i % 100          # bank 0 pixel for particle i

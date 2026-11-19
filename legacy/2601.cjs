@@ -3517,7 +3517,7 @@ function Nt(e, t) {
   };
 }
 var Vt = "#define GLSLIFY 1\nmat4 rotationMatrix(vec3 axis, float angle)\n{\n    axis = normalize(axis);\n    float s = sin(angle);\n    float c = cos(angle);\n    float oc = 1.0 - c;\n    \n    return mat4(oc * axis.x * axis.x + c,           oc * axis.x * axis.y - axis.z * s,  oc * axis.z * axis.x + axis.y * s,  0.0,\n                oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c,           oc * axis.y * axis.z - axis.x * s,  0.0,\n                oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c,           0.0,\n                0.0,                                0.0,                                0.0,                                1.0);\n}\n";
-var Gt = "#define GLSLIFY 1\nmat4 rotMat = rotationMatrix(vec3(a_angle.x, a_angle.y, a_angle.z), mod(a_angle.w * u_time * 0.15, 3.1416 * 2.));\nvec4 mvPosition = vec4( transformed, 1.0 );\n\nv_color = a_color;\n\n#ifdef USE_INSTANCING\n  mat4 instanceMat = instanceMatrix;\n\n  float zFactor = map(instanceMat[3][2], 0., 9., 0.5, 0.2);\n\n  instanceMat[3][0] = instanceMat[3][0] * u_resolution.x * zFactor - u_mouse.x * a_param.x + sin(u_time * a_param.w * 0.5) * a_param.y * 0.15;\n  instanceMat[3][1] = instanceMat[3][1] * u_resolution.y * zFactor - u_mouse.y * a_param.x + cos(u_time * a_param.w * 0.5) * a_param.z * 0.15;\n  instanceMat[3][2] = instanceMat[3][2];\n\n  instanceMat[0][0] = instanceMat[0][0] * u_scale;\n  instanceMat[1][1] = instanceMat[1][1] * u_scale;\n  instanceMat[2][2] = instanceMat[2][2] * u_scale;\n\n  instanceMat *= rotMat;\n\n\tmvPosition = instanceMat * mvPosition;\n#endif\n\nmvPosition = modelViewMatrix * mvPosition;\ngl_Position = projectionMatrix * mvPosition;";
+var Gt = "#define GLSLIFY 1\nmat4 rotMat = rotationMatrix(vec3(a_angle.x, a_angle.y, a_angle.z), mod(a_angle.w * u_time * 0.15, 3.1416 * 2.));\nvec4 mvPosition = vec4( transformed, 1.0 );\n\nv_color = a_color;\n\n#ifdef USE_INSTANCING\n  mat4 instanceMat = instanceMatrix;\n\n  float zFactor = map(instanceMat[3][2], 0., 9., 0.5, 0.2);\n\n  instanceMat[3][0] = instanceMat[3][0] * u_resolution.x * zFactor - u_mouse.x * a_param.x + sin(u_time * a_param.w * 0.5) * a_param.y * 0.15;\n  instanceMat[3][1] = instanceMat[3][1] * u_resolution.y * zFactor - u_mouse.y * a_param.x + cos(u_time * a_param.w * 0.5) * a_param.z * 0.15;\n  instanceMat[3][2] = instanceMat[3][2];\n\n  instanceMat[0][0] = instanceMat[0][0] * u_scale;\n  instanceMat[1][1] = instanceMat[1][1] * u_scale;\n  instanceMat[2][2] = instanceMat[2][2] * u_scale;\n\n\n\tmvPosition = instanceMat * mvPosition;\n#endif\n\nmvPosition = modelViewMatrix * mvPosition;\ngl_Position = projectionMatrix * mvPosition;";
 var Wt = "#define GLSLIFY 1\nfloat map(float value, float min1, float max1, float min2, float max2) {\n  return min2 + (value - min1) * (max2 - min2) / (max1 - min1);\n}\n";
 class Ht extends Re.T {
   constructor() {
@@ -3594,21 +3594,17 @@ ${e.fragmentShader}`;
     const s = new Float32Array(this._nb * 4);
     const a = new Float32Array(this._nb * 4);
     const l = [{
-      r: 93,
-      g: 57,
-      b: 154
+      r: 4,
+      g: 30,
+      b: 66
     }, {
-      r: 186,
-      g: 136,
-      b: 43
+      r: 214,
+      g: 190,
+      b: 147
     }, {
-      r: 40,
-      g: 116,
-      b: 100
-    }, {
-      r: 164,
-      g: 148,
-      b: 175
+      r: 246,
+      g: 242,
+      b: 233
     }];
     for (let i = 0; i < this._nb; i++) {
       const c = Math.random() * 2 - 1;
@@ -3620,9 +3616,9 @@ ${e.fragmentShader}`;
       e.compose(t, n, r);
       this._mesh.setMatrixAt(i, e);
       e.identity();
-      o[i * 4] = l[i % 4].r / 255;
-      o[i * 4 + 1] = l[i % 4].g / 255;
-      o[i * 4 + 2] = l[i % 4].b / 255;
+      o[i * 4] = l[i % 3].r / 255;
+      o[i * 4 + 1] = l[i % 3].g / 255;
+      o[i * 4 + 2] = l[i % 3].b / 255;
       o[i * 4 + 3] = Math.random();
       s[i * 4] = Math.random() * 2 - 1;
       s[i * 4 + 1] = Math.random() * 2 - 1;
