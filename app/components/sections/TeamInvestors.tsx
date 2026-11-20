@@ -32,12 +32,12 @@ export default function TeamInvestors() {
             <p className="t-20 t-lh-1.5 -t-ls-0.03 t-400">
               We are actively hiring intentional, empathetic and curious people who thrive on creating delightful
               experiences. If you&apos;d like to be a part of the journey, email{" "}
-              <a href="mailto:careers@dala.ai">careers@dala.ai</a> with your CV or portfolio, and a thoughtful note.
+              <a href="#">us</a> with your CV or portfolio, and a thoughtful note.
             </p>
             <p className="t-20 t-lh-1.5 -t-ls-0.03 t-400">
               Read more about our values{" "}
               <a
-                href="https://medium.com/dala-ai/why-we-wrote-our-values-before-we-wrote-a-single-line-of-code-99ada8a18cd5"
+                href="#"
                 target="_blank"
                 rel="noreferrer noopener"
               >

@@ -1,4 +1,3 @@
-import Logo from "./Logo";
 import Nav from "./Nav";
 
 export default function Header() {
@@ -9,13 +8,13 @@ export default function Header() {
       </div>
       <div className="header__inner js-header-inner">
         <button className="header__logo | js-header-logo" anchor-link="landing">
-          <Logo /> <span className="sr">Dala</span>
+          <svg width="0" height="0" aria-hidden="true"><g className="js-header-logo-text-group" /></svg>
         </button>
         <div className="header__cta mr-4">
           <a
             className="btn t-16 t-14@xs t-16@sm t-ls-0.025 t-600 t-uppercase"
             aria-label="Request Access"
-            href="https://askdala.typeform.com/to/lSujgyr8"
+            href="#"
             target="_blank"
             rel="noopener"
           >
@@ -23,7 +22,7 @@ export default function Header() {
             <div className="btn__hover pointer-events-none" aria-hidden="true"></div>
           </a>
         </div>
-        <h1 className="sr">Dala</h1>
+        <h1 className="sr">Unlock collective wisdom</h1>
         <Nav />
       </div>
     </header>

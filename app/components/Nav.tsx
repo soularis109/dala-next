@@ -1,7 +1,7 @@
 const NAV_ITEMS: { sectionName: string; label: string; href: string; anchorLink?: string; external?: boolean }[] = [
   { sectionName: "manifesto", label: "Manifesto", href: "/#manifesto", anchorLink: "manifesto" },
   { sectionName: "team", label: "Team", href: "/#team", anchorLink: "team" },
-  { sectionName: "blog", label: "Blog", href: "https://medium.com/dala-ai", external: true },
+  { sectionName: "blog", label: "Blog", href: "#", external: true },
 ];
 
 export default function Nav() {
@@ -30,7 +30,7 @@ export default function Nav() {
           <a
             className="btn t-16 t-14@xs t-16@sm t-ls-0.025 t-600 t-uppercase"
             aria-label="Request Access"
-            href="https://askdala.typeform.com/to/lSujgyr8"
+            href="#"
             target="_blank"
             rel="noopener"
           >

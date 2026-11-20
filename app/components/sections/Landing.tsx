@@ -22,7 +22,7 @@ export default function Landing() {
               className="t-24 t-lh-1.5 -t-ls-0.02 t-200"
               animate-from="preset: 'splitTextRotateIn', rotate: 7, delay: 1, duration: 1"
             >
-              Plug into your team’s shared brainpower. Ask Dala to instantly find anything or anyone from any
+              Plug into your team’s shared brainpower. Ask to instantly find anything or anyone from any
               workplace system. Focus on doing your best work with context, conviction and clarity.
             </p>
             <div className="overflow-hidden">
@@ -30,7 +30,7 @@ export default function Landing() {
                 <a
                   className="btn t-16 t-14@xs t-16@sm t-ls-0.025 t-600 t-uppercase"
                   aria-label="Request Access"
-                  href="https://askdala.typeform.com/to/lSujgyr8"
+                  href="#"
                   target="_blank"
                   rel="noopener"
                 >

@@ -4462,7 +4462,7 @@ ${e.fragmentShader}`;
     // Lets DOM overlays (the stamp) stay glued to the document: maps a point given in the simulation space of the
     // particles (p - 0.5) * 2 * radius to a CSS pixel, with the same matrices as the vertex shader (tn):
     // modelView with u_offset added, times Rx * Ry * Rz of u_rotation, times the projection of the particle camera.
-    window.__dalaProject = (px, py, pz) => {
+    window.__siteProject = (px, py, pz) => {
       const cam = u.WebGL && u.WebGL.particleCamera;
       if (!cam || !this._mesh) return null;
       const mul = (a, b) => {
@@ -5423,7 +5423,7 @@ class wn extends bt {
     _n(this, "onRaf", () => {
       if (u.sectionIndex === this.id) {
         u.sectionProgress = u.sectionIndex + Math.abs((u.ASS.currentPos - this.bcrTop) / this.bcr.height);
-        window.__dalaProgress = u.sectionProgress;
+        window.__siteProgress = u.sectionProgress;
       }
     });
     _n(this, "enter", () => {

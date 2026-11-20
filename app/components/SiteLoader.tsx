@@ -24,7 +24,7 @@ export default function SiteLoader() {
               <div className="site-loader__heading-inner | js-site-loader-heading-text">Your workplace has the answer.</div>
             </div>
             <div className="site-loader__heading-text">
-              <div className="site-loader__heading-inner | js-site-loader-heading-text">Ask Dala to find it.</div>
+              <div className="site-loader__heading-inner | js-site-loader-heading-text">Ask to find it.</div>
             </div>
           </div>
         </div>

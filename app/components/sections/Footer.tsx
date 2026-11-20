@@ -1,17 +1,16 @@
-import Logo from "../Logo";
 
 const FOOTER_NAV_ITEMS: { sectionName: string; label: string; anchorLink?: string; href?: string }[] = [
   { sectionName: "manifesto", label: "Manifesto", anchorLink: "manifesto" },
   { sectionName: "team", label: "Team", anchorLink: "team" },
-  { sectionName: "blog", label: "Blog", href: "https://medium.com/dala-ai" },
+  { sectionName: "blog", label: "Blog", href: "#" },
   { sectionName: "privacy", label: "Privacy", href: "/privacy" },
   { sectionName: "terms", label: "Terms", href: "/terms" },
 ];
 
 const SOCIAL_LINKS = [
-  { label: "LinkedIn", icon: "linkedin", href: "https://www.linkedin.com/company/askdala/" },
-  { label: "Twitter", icon: "twitter", href: "https://twitter.com/askdala" },
-  { label: "Email", icon: "email", href: "mailto:hello@dala.ai" },
+  { label: "LinkedIn", icon: "linkedin", href: "#" },
+  { label: "Twitter", icon: "twitter", href: "#" },
+  { label: "Email", icon: "email", href: "#" },
 ];
 
 export default function Footer() {
@@ -22,13 +21,13 @@ export default function Footer() {
           className="t-40 t-lh-1 t-48@sm t-lh-1.2@sm t-64@md t-lh-1.1@md -t-ls-0.03 t-400 mb-2"
           animate-from="preset: 'splitTextRotateIn', scrollTrigger: { start: 'top bottom' }"
         >
-          Your workplace has the answer. Ask Dala to find it.
+          Your workplace has the answer. Ask to find it.
         </h2>
         <div className="d-flex justify-center">
           <a
             className="btn t-16 t-14@xs t-16@sm t-ls-0.025 t-600 t-uppercase"
             aria-label="Request access"
-            href="https://askdala.typeform.com/to/lSujgyr8"
+            href="#"
             target="_blank"
             rel="noopener"
           >
@@ -39,10 +38,10 @@ export default function Footer() {
       </div>
       <div className="footer__bar">
         <div className="footer__logo">
-          <Logo /> <span className="sr">Dala</span>
+
         </div>
         <div className="footer__copyright">
-          <span className="footer__copyright__item">© 2021 Dala Technologies Limited.</span>{" "}
+          
           <span className="footer__copyright__item">All rights reserved.</span>
         </div>
         <ul className="footer__nav">

@@ -12,7 +12,7 @@ export default function Introduction() {
           className="introduction__body t-24 t-lh-1.5 -t-ls-0.02 t-200"
           animate-from="preset: 'splitTextRotateIn', rotate: 7, delay: 0.5, duration: 0.8, scrollTrigger: { start: 'top bottom' }"
         >
-          Dala’s bleeding-edge AI search tool automates extracting knowledge from across your organisation so that
+          Our bleeding-edge AI search tool automates extracting knowledge from across your organisation so that
           you can take the guesswork out of your work.
         </p>
       </div>

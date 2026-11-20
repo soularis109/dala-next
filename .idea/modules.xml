@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/dala-next.iml" filepath="$PROJECT_DIR$/.idea/dala-next.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/site-next.iml" filepath="$PROJECT_DIR$/.idea/site-next.iml" />
     </modules>
   </component>
 </project>

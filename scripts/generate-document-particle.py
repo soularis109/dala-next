@@ -48,7 +48,7 @@ blob = pos_b + nrm_b + uv_b + idx_b
 xs, ys, zs_ = [p[0] for p in pos], [p[1] for p in pos], [p[2] for p in pos]
 
 doc = {
-    'asset': {'generator': 'Dala document particle generator', 'version': '2.0'},
+    'asset': {'generator': 'document particle generator', 'version': '2.0'},
     'scene': 0, 'scenes': [{'nodes': [0]}],
     'nodes': [{'mesh': 0, 'name': 'document-particle'}],
     'meshes': [{'name': 'document-particle-mesh', 'primitives': [{'attributes': {'POSITION': 0, 'NORMAL': 1, 'TEXCOORD_0': 2}, 'indices': 3}]}],

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 
 // Scene A: the stamp on the earlier document ("Spark lightbulb moments"), a pure function of the scroll
-// progress published by the engine (window.__dalaProgress), so scrolling back reverses it exactly.
+// progress published by the engine (window.__siteProgress), so scrolling back reverses it exactly.
 const P = { approach: 3.95, press: 4.1, pressEnd: 4.18, lift: 4.3, inkStart: 4.12, scatter: 4.5, scatterEnd: 5 };
 
 // Scene B: the last document at the end of the site is the same document, already carrying the stamp imprint
@@ -20,7 +20,7 @@ const smooth = (v: number, a: number, b: number) => {
 };
 
 // ---- scene A is glued to the sheet ----
-// The sheet is made of particles (WebGL); the engine exposes window.__dalaProject(x, y, z): a point in the particle
+// The sheet is made of particles (WebGL); the engine exposes window.__siteProject(x, y, z): a point in the particle
 // simulation space ((p - 0.5) * 2 * radius) -> CSS pixel, through the same matrices as the vertex shader.  The sheet in
 // bank 2 (the one the stamp lands on) is the bank 0 sheet turned about Y by DOC_TILT, the pose it has on step 2.
 const SHEET_W = 0.6; // sheet size in particle-space fractions, see scripts/generate-hero-document.py
@@ -55,7 +55,7 @@ const sheetPoint = (uv: number[], dx: number, dy: number, tilt: number): [number
 // or the extent of the content around the element origin when its children are already centred on it.
 // Returns false when the engine is not there (yet), the caller then keeps the plain CSS position.
 function glueToSheet(el: HTMLElement, uv: number[], hx: number, hy: number, tilt: number, hpx: number, hpy: number, post = "") {
-  const project = (window as unknown as { __dalaProject?: Project }).__dalaProject;
+  const project = (window as unknown as { __siteProject?: Project }).__siteProject;
   const c = project?.(...sheetPoint(uv, 0, 0, tilt));
   const px = project?.(...sheetPoint(uv, hx, 0, tilt));
   const py = project?.(...sheetPoint(uv, 0, hy, tilt));
@@ -101,6 +101,8 @@ const FONT: Record<string, string[]> = {
   A: ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
   D: ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
   L: ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
+  O: ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
+  K: ["10001", "10010", "10100", "11000", "10100", "10010", "10001"],
 };
 
 // ---- shared helpers for the mosaic drawings (visa, stamp and stamp imprint all use the document's squares) ----
@@ -229,7 +231,7 @@ function drawStampBody(canvas: HTMLCanvasElement) {
   }
 }
 
-// The round "APPROVED" imprint made of squares: two rings, "DALA" in the pixel font around the band, a check in the middle.
+// The round "APPROVED" imprint made of squares: two rings, "OK" in the pixel font around the band, a check in the middle.
 function drawStampMark(canvas: HTMLCanvasElement) {
   const SC = 4;
   const N = 50;
@@ -248,8 +250,8 @@ function drawStampMark(canvas: HTMLCanvasElement) {
       if (Math.abs(d - 22) <= 1 || Math.abs(d - 19) <= 0.55 || Math.abs(d - 11.5) <= 0.55) ink[row][col] = true;
     }
   }
-  // "DALA·" three times along the band between the rings, letters upright towards the outside, reading clockwise
-  const text = "DALA·DALA·DALA·";
+  // "OK·" five times along the band between the rings, letters upright towards the outside, reading clockwise
+  const text = "OK·OK·OK·OK·OK·";
   const RMID = 15;
   const theta0 = 0.14;
   [...text].forEach((ch, slot) => {
@@ -323,7 +325,7 @@ export default function DocumentStamp() {
       raf = requestAnimationFrame(tick);
       const dt = Math.min(0.1, (now - lastT) / 1000);
       lastT = now;
-      const p: number = (window as unknown as { __dalaProgress?: number }).__dalaProgress ?? 0;
+      const p: number = (window as unknown as { __siteProgress?: number }).__siteProgress ?? 0;
 
       // scene A (earlier document)
       if (Math.abs(p - lastP) >= 0.0005) {

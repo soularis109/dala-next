@@ -2,13 +2,10 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { gtagInit, posthogInit } from "./analytics";
 
-const desc = "Your workplace has the answer. Just ask Dala for it.";
-const ogAlt =
-  'The Dala logo above the headline "Unlock collective wisdom", sitting on top of a 3D brain composed of many small pyramidal particles.';
+const desc = "Your workplace has the answer. Just ask for it.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://dala.ai"),
-  title: "Dala",
+  title: "Unlock collective wisdom",
   description: desc,
   authors: [{ name: "unseen.co" }],
   manifest: "/images/favicons/site.webmanifest",
@@ -22,19 +19,15 @@ export const metadata: Metadata = {
     other: [{ rel: "mask-icon", url: "/images/favicons/safari-pinned-tab.svg", color: "#5bbad5" }],
   },
   openGraph: {
-    title: "Dala",
+    title: "Unlock collective wisdom",
     siteName: desc,
-    url: "https://dala.ai/",
     description: desc,
     type: "website",
-    images: [{ url: "https://dala.ai/images/fb-og.jpg", alt: ogAlt, width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
-    site: "@askdala",
-    title: "Dala",
+    title: "Unlock collective wisdom",
     description: desc,
-    images: [{ url: "https://dala.ai/images/twitter-og.jpg", alt: ogAlt }],
   },
   other: {
     "msapplication-TileColor": "#000",
