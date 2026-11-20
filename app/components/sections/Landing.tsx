@@ -4,7 +4,7 @@ export default function Landing() {
       <div anchor-target="landing"></div>
       <div className="section landing | js-section" section-name="landing">
         <h2
-          className="landing__title t-56 t-80@xs t-104@sm t-150@md t-lh-0.9 -t-ls-0.03 t-400 t-display mb-1.5 t-lh-1.1 mb-1"
+          className="text-blur landing__title t-56 t-80@xs t-104@sm t-150@md t-lh-0.9 -t-ls-0.03 t-400 t-display mb-1.5 t-lh-1.1 mb-1"
           animate-from="preset: 'splitTextRotateIn', delay: 0, duration: 1, scrollTrigger: { children: 'span' }"
         >
           <span className="d-block">Unlock</span> <span className="d-block">collective</span>{" "}
@@ -13,13 +13,13 @@ export default function Landing() {
         <div className="mobile-blur mt-0 mb-auto">
           <div className="landing__body">
             <div
-              className="t-16 t-lh-1.2 t-ls-0.05 t-600 t-uppercase mb-1 t-yellow"
+              className="text-blur t-16 t-lh-1.2 t-ls-0.05 t-600 t-uppercase mb-1 t-yellow"
               animate-from="preset: 'splitTextRotateIn', rotate: 7, delay: 1, duration: 1"
             >
               Stop managing knowledge. Start using it.
             </div>
             <p
-              className="t-24 t-lh-1.5 -t-ls-0.02 t-200"
+              className="text-blur t-24 t-lh-1.5 -t-ls-0.02 t-200"
               animate-from="preset: 'splitTextRotateIn', rotate: 7, delay: 1, duration: 1"
             >
               Plug into your team’s shared brainpower. Ask to instantly find anything or anyone from any

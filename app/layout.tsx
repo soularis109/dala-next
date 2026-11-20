@@ -52,6 +52,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         {/* eslint-disable-next-line @next/next/no-css-tags */}
         <link rel="stylesheet" href="/css/style.css" />
+        {/* eslint-disable-next-line @next/next/no-css-tags */}
+        <link rel="stylesheet" href="/css/text-blur.css" />
       </head>
       <body>
         {children}

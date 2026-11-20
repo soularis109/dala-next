@@ -30,7 +30,7 @@ export default function ManifestoIntro() {
               animate-mq="sm"
             >
               {pair.map((text, j) => (
-                <p className="t-24 t-lh-1.3 -t-ls-0.03 t-48@sm t-lh-1.2@sm t-400 t-display | js-manifesto-p" key={j}>
+                <p className="text-blur t-24 t-lh-1.3 -t-ls-0.03 t-48@sm t-lh-1.2@sm t-400 t-display | js-manifesto-p" key={j}>
                   {text}
                 </p>
               ))}

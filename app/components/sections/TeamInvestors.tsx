@@ -11,7 +11,7 @@ export default function TeamInvestors() {
           animate-from="y: '-5vw', scrollTrigger: { scrub: 0.5, once: false, start: 'top bottom' }"
         >
           <h2
-            className="t-56 t-lh-1 t-64@sm t-lh-1.2@sm t-104@md t-lh-1.1@md -t-ls-0.03 t-400 t-display mb-2@xs mb-2.5@sm mb-3@md"
+            className="text-blur t-56 t-lh-1 t-64@sm t-lh-1.2@sm t-104@md t-lh-1.1@md -t-ls-0.03 t-400 t-display mb-2@xs mb-2.5@sm mb-3@md"
             animate-from="preset: 'splitTextRotateIn', scrollTrigger: { start: 'top bottom' }"
           >
             Our team
@@ -20,7 +20,7 @@ export default function TeamInvestors() {
         <TeamSlider />
         <div animate-from="y: '-5vw', scrollTrigger: { trigger: '.js-team-head', scrub: 0.5, once: false, start: 'top bottom' }">
           <h3
-            className="t-36 t-lh-1 -t-ls-0.03 t-400 t-display mt-5@sm"
+            className="text-blur t-36 t-lh-1 -t-ls-0.03 t-400 t-display mt-5@sm"
             animate-from="preset: 'splitTextRotateIn', rotate: 7, delay: 0.5, duration: 0.8, scrollTrigger: { start: 'top bottom' }"
           >
             Build with us.
@@ -30,12 +30,12 @@ export default function TeamInvestors() {
             data-cta-text=""
             animate-from="preset: 'splitTextRotateIn', rotate: 7, delay: 1, duration: 0.8, scrollTrigger: { start: 'top bottom' }, children: 'p'"
           >
-            <p className="t-20 t-lh-1.5 -t-ls-0.03 t-200">
+            <p className="text-blur t-20 t-lh-1.5 -t-ls-0.03 t-200">
               We are actively hiring intentional, empathetic and curious people who thrive on creating delightful
               experiences. If you&apos;d like to be a part of the journey, email{" "}
               <a href="#">us</a> with your CV or portfolio, and a thoughtful note.
             </p>
-            <p className="t-20 t-lh-1.5 -t-ls-0.03 t-200">
+            <p className="text-blur t-20 t-lh-1.5 -t-ls-0.03 t-200">
               Read more about our values{" "}
               <a
                 href="#"

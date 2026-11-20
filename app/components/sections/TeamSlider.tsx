@@ -20,8 +20,8 @@ export default function TeamSlider() {
         {TEAM_MEMBERS.map((member) => (
           <li className="team-slider__content__item" key={member.slideId}>
             <div className="team-card__content | js-slide-content" slide-id={member.slideId}>
-              <span className="t-16 t-lh-1.2 t-ls-0.05 t-600 t-uppercase mb-1 t-purple | js-role">{member.role}</span>
-              <h3 className="t-40 t-lh-1 t-56@md t-lh-0.9@md t-lh-1.2@md -t-ls-0.03 t-400 t-display mb-1 | js-name">{member.name}</h3>
+              <span className="text-blur t-16 t-lh-1.2 t-ls-0.05 t-600 t-uppercase mb-1 t-purple | js-role">{member.role}</span>
+              <h3 className="text-blur t-40 t-lh-1 t-56@md t-lh-0.9@md t-lh-1.2@md -t-ls-0.03 t-400 t-display mb-1 | js-name">{member.name}</h3>
               <div className="team-card__social">
                 <a className="team-card__social__link | js-social-icon" href={member.twitter} target="_blank" rel="noopener">
                   <span className="sr">Twitter</span>{" "}

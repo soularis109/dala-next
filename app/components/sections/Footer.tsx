@@ -18,7 +18,7 @@ export default function Footer() {
     <div className="section footer | js-section">
       <div className="footer__head" data-cta-anchor="">
         <h2
-          className="t-40 t-lh-1 t-48@sm t-lh-1.2@sm t-64@md t-lh-1.1@md -t-ls-0.03 t-400 t-display mb-2"
+          className="text-blur t-40 t-lh-1 t-48@sm t-lh-1.2@sm t-64@md t-lh-1.1@md -t-ls-0.03 t-400 t-display mb-2"
           animate-from="preset: 'splitTextRotateIn', scrollTrigger: { start: 'top bottom' }"
         >
           Your workplace has the answer. Ask to find it.

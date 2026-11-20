@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { AMBER, BODY, FOLD, FONT, LIGHT, LILAC, PAPER, TEAL, TEXT, TITLE, VIOLET, clamp255, drawStampMark, makeRng, mix, prepareCanvas } from "./mosaic";
+import { AMBER, BODY, FOLD, FONT, LIGHT, LILAC, PAPER, TEAL, TEXT, TITLE, VIOLET, clamp255, drawLogoMark, drawStampMark, makeRng, mix, prepareCanvas } from "./mosaic";
 
 // Scene A: the stamp on the earlier document ("Spark lightbulb moments"), a pure function of the scroll
 // progress published by the engine (window.__siteProgress), so scrolling back reverses it exactly.
@@ -38,9 +38,9 @@ const FINAL_TILT = 0;
 const VISA_UV = [0.5, 0.62]; // centre of the visa on the sheet
 const VISA_HALF_X = 1.45; // half width of the visa on the sheet (~55% of the sheet width)
 const VISA_PX = [130, 82]; // half size of the visa canvas in CSS px (260 x 164)
-const FINAL_MARK_UV = [0.3, 0.2]; // the imprint of the stamp on the final sheet, same spot as on the earlier document
-const FINAL_MARK_HALF = 1.1;
-const FINAL_MARK_PX = 82.5; // half of the 165 px canvas
+const FINAL_MARK_UV = [0.31, 0.25]; // the FMB imprint on the final sheet, lower left, clear of the sheet edge
+const FINAL_MARK_HALF = 1.35;
+const FINAL_MARK_PX = 100; // half of the 200 px canvas
 
 // Point of the flat sheet at uv (0..1 from its left / bottom edge) plus an offset (dx right / dy up, in sheet units),
 // turned about Y by `tilt` like the sheet itself (bank 2: DOC_TILT, the pose of step 2; the final bank 3 sheet: 0).
@@ -207,7 +207,7 @@ export default function DocumentStamp() {
     if (visaB.current) drawVisa(visaB.current);
     if (bodyCanvasA.current) drawStampBody(bodyCanvasA.current);
     if (markCanvasA.current) drawStampMark(markCanvasA.current);
-    if (markCanvasB.current) drawStampMark(markCanvasB.current);
+    if (markCanvasB.current) drawLogoMark(markCanvasB.current, "/images/FMB%20logo%20transparent.png");
     let raf = 0;
     let lastP = -1;
     let a = 0;
@@ -272,11 +272,11 @@ export default function DocumentStamp() {
     <>
       <style>{`
         .document-stamp { display: none; position: fixed; width: 0; height: 0; z-index: 5; pointer-events: none; }
-        .document-stamp--a { left: 31%; top: 80%; }
-        .document-stamp--b { left: 47%; top: 37.5%; }
+        .document-stamp--a { left: 25%; top: 80%; }
+        .document-stamp--b { left: 47%; top: 37.5%; z-index: -1; } /* on the sheet, under the footer copy */
         .document-stamp__mark { position: absolute; width: 190px; height: 190px; left: -95px; top: -95px; opacity: 0; transform: rotate(-12deg); mix-blend-mode: multiply; }
         .document-stamp__body { position: absolute; width: 130px; height: 169px; left: -65px; top: -150px; opacity: 0; transform-origin: 50% 100%; filter: drop-shadow(0 14px 18px rgba(0,0,0,.45)); }
-        .document-stamp--b .document-stamp__mark { width: 165px; height: 165px; left: -133px; top: 103px; }
+        .document-stamp--b .document-stamp__mark { width: 200px; height: 200px; left: -133px; top: 103px; }
         .document-stamp__mark canvas, .document-stamp__body canvas { display: block; width: 100%; height: 100%; }
         .document-stamp__visa { position: absolute; width: 260px; height: 164px; left: -130px; top: -82px; opacity: 0; }
         @media (max-width: 1023px) { .document-stamp--a { left: 50%; top: 62%; } .document-stamp--b { left: 50%; top: 40%; } }

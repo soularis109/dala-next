@@ -13,6 +13,7 @@ import TeamInvestors from "./components/sections/TeamInvestors";
 import Footer from "./components/sections/Footer";
 import ScriptLoader from "./ScriptLoader";
 import DocumentStamp from "./components/DocumentStamp";
+import TextBlurSizer from "./components/TextBlurSizer";
 
 export default function Page() {
   return (
@@ -23,6 +24,7 @@ export default function Page() {
       <CookieNotice />
       <FloatingCta />
       <SiteLoader />
+      <TextBlurSizer />
       <NavTransitionMask />
       <div asscroll-container="">
         <main>

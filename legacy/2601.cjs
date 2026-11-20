@@ -3941,7 +3941,7 @@ class an extends Re.T {
         });
         e++;
       }
-      a.sort((e, t) => e.x - t.x);
+      a.sort((e, t) => t.x - e.x); // order 0 = rightmost: the streams gather from right to left
       for (let e = 0; e < a.length; e++) {
         a[e].order = e;
       }
@@ -4101,6 +4101,9 @@ class an extends Re.T {
           t_params3: {
             value: this._tParams3
           },
+          u_cloud: {
+            value: { x: 0, y: 0, z: 0, w: 0 }
+          },
           t_velocity: {
             value: null
           },
@@ -4139,7 +4142,7 @@ class an extends Re.T {
           }
         },
         vertexShader: sn,
-        fragmentShader: "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D t_oTarget;\nuniform sampler2D t_position;\nuniform sampler2D t_oVelocity;\nuniform sampler2D t_params;\nuniform sampler2D t_params2;\nuniform sampler2D t_params3;\n\nuniform vec2 u_resolution;\nuniform float u_factor;\nuniform float u_length;\nuniform float u_show;\nuniform float u_explode;\nuniform float u_progress;\nuniform float u_time;\nuniform float u_spring;\nuniform float u_friction;\nuniform float u_rendered;\nuniform float u_delay;\nuniform vec2 u_sway;\n\nvarying vec2 vUv;\n\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return step(inValue , 0.5) * inValue + step(0.5,outValue) * outValue;\n}\n\nvoid main() {\n  float vx = 0.;\n  float vy = 0.;\n  float vz = 0.;\n  float tp = 0.;\n\n  if (u_rendered > 0.) {\n    vec4 tParams = texture2D(t_params, vUv);\n    vec4 tParams2 = texture2D(t_params2, vUv);\n    vec4 tParams3 = texture2D(t_params3, vUv);\n\n    // Show Animation -----\n    float d = 0.00005;\n    float d3 = 0.00015;\n    float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * tParams.z));\n    showVal = qinticInOut(showVal);\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + u_explode * tParams.y;\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w)) * 6.;\n    float radius = mix(u_factor + tParams.x * 3., u_factor, showVal);\n\n    vec3 pos = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5)).xyz;\n    vec3 basePos = pos;\n\n    pos.x = (pos.x - 0.5) * 2. * radius;\n    pos.y = (pos.y - 0.5) * 2. * radius;\n    pos.z = (pos.z - 0.5) * 2. * radius;\n\n    vec3 pos2 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5)).xyz;\n    pos2.x = (pos2.x - 0.5) * 2. * radius;\n    pos2.y = (pos2.y - 0.5) * 2. * radius;\n    pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n    vec3 pos3 = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos3.x = (pos3.x - 0.5) * 2. * radius;\n    pos3.y = (pos3.y - 0.5) * 2. * radius;\n    pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n    vec3 pos4 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos4.x = (pos4.x - 0.5) * 2. * radius;\n    pos4.y = (pos4.y - 0.5) * 2. * radius;\n    pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xy *= u_resolution * 2.;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xyz *= vec3(u_resolution * 2., u_resolution.x * 2.);\n\n    float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for dekstop\n    // Gather into the streams as a wave from left to right: tParams2.x = order by x in bank 1; each particle takes 1/6 of\n    // the window (u_delay is not bound to this material, so d4 is 0 here).\n    float dg = 5. / u_length;\n    float t1 = min(1., max(0., ((u_progress * (1. + dg * (u_length - 1.))) - dg * tParams2.x)));\n    pos = mix(pos, pos2, t1);\n    pos = mix(pos, pos3, min(1., max(0., ((max(0., u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y))));\n    pos = mix(pos, pos4, min(1., max(0., ((max(0., u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z))));\n    // While the cloud folds into the streams (u_progress <= 1) each particle drops its scatter as it reaches its stream\n    // spot: the streams fill from left to right (tParams2.x = order by x in bank 1).\n    float ex = min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w));\n    ex *= 1. - t1 * (1. - step(1.001, u_progress));\n    pos = mix(pos, pos * tParams3.x, ex);\n\n    vec4 tOtarget = texture2D(t_oTarget, vUv);\n    vec4 tOVelocity = texture2D(t_oVelocity, vUv);\n\n    float spring = u_spring + tParams.w;\n    float friction = u_friction;\n\n    // Scroll sway while exploded (p 1.1-2.7): every particle drifts left/right by its own amount (parallax).\n    pos.xy += u_sway * (0.55 + 0.9 * tParams.x) * u_explode;\n\n    float dx = pos.x - tOtarget.x;\n    float dy = pos.y - tOtarget.y;\n    float dz = pos.z - tOtarget.z;\n\n    float ax = dx * spring;\n    float ay = dy * spring;\n    float az = dz * spring;\n\n    float wasTp = tOVelocity.w;\n    vx = tOVelocity.x * (1. - wasTp) + ax;\n    vy = tOVelocity.y * (1. - wasTp) + ay;\n    vz = tOVelocity.z * (1. - wasTp) + az;\n\n    vx *= friction;\n    vy *= friction;\n    vz *= friction;\n\n  }\n\n  gl_FragColor = vec4(vec3(vx, vy, vz), tp);\n}\n"
+        fragmentShader: "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D t_oTarget;\nuniform sampler2D t_position;\nuniform sampler2D t_oVelocity;\nuniform sampler2D t_params;\nuniform sampler2D t_params2;\nuniform sampler2D t_params3;\n\nuniform vec2 u_resolution;\nuniform float u_factor;\nuniform float u_length;\nuniform float u_show;\nuniform float u_explode;\nuniform float u_progress;\nuniform float u_time;\nuniform float u_spring;\nuniform float u_friction;\nuniform float u_rendered;\nuniform float u_delay;\nuniform vec4 u_cloud;\nuniform vec2 u_sway;\n\nvarying vec2 vUv;\n\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return step(inValue , 0.5) * inValue + step(0.5,outValue) * outValue;\n}\n\nvoid main() {\n  float vx = 0.;\n  float vy = 0.;\n  float vz = 0.;\n  float tp = 0.;\n\n  if (u_rendered > 0.) {\n    vec4 tParams = texture2D(t_params, vUv);\n    vec4 tParams2 = texture2D(t_params2, vUv);\n    vec4 tParams3 = texture2D(t_params3, vUv);\n\n    // Show Animation -----\n    float d = 0.00005;\n    float d3 = 0.00015;\n    float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * tParams.z));\n    showVal = qinticInOut(showVal);\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + u_explode * tParams.y;\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w)) * 6.;\n    float radius = mix(u_factor + tParams.x * 3., u_factor, showVal);\n\n    vec3 pos = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5)).xyz;\n    vec3 basePos = pos;\n\n    pos.x = (pos.x - 0.5) * 2. * radius;\n    pos.y = (pos.y - 0.5) * 2. * radius;\n    pos.z = (pos.z - 0.5) * 2. * radius;\n\n    vec3 pos2 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5)).xyz;\n    pos2.x = (pos2.x - 0.5) * 2. * radius;\n    pos2.y = (pos2.y - 0.5) * 2. * radius;\n    pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n    vec3 pos3 = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos3.x = (pos3.x - 0.5) * 2. * radius;\n    pos3.y = (pos3.y - 0.5) * 2. * radius;\n    pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n    vec3 pos4 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos4.x = (pos4.x - 0.5) * 2. * radius;\n    pos4.y = (pos4.y - 0.5) * 2. * radius;\n    pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xy *= u_resolution * 2.;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xyz *= vec3(u_resolution * 2., u_resolution.x * 2.);\n\n    float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for dekstop\n    // Gather into the streams as a wave from right to left: tParams2.x = order by x in bank 1, rightmost first; each particle takes 1/3 of\n    // the window (u_delay is not bound to this material, so d4 is 0 here).\n    float dg = 2. / u_length;\n    float t1 = min(1., max(0., ((u_progress * (1. + dg * (u_length - 1.))) - dg * tParams2.x)));\n    // In the stream phase the scatter is applied to the sheet first, so each particle flies straight from its spot in\n    // the cloud into its stream spot (no pull back to the centre of the cloud on the way).\n    // Towards the end of its turn the cloud moves to the right half of the screen and stays there (u_cloud.xyz: shift in\n    // group space, so it points right on screen whatever the turn; u_cloud.w: squeezes x / z so the cloud fits the half).\n    // A particle drops the shift as it folds into its stream, so the streams grow out of the cloud on the right.\n    float ex = min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w));\n    float pre = 1. - step(1.001, u_progress);\n    float kx = mix(tParams3.x, 1. + (tParams3.x - 1.) * 0.2, u_cloud.w);\n    pos = mix(pos, pos * vec3(kx, tParams3.x, kx) + u_cloud.xyz, ex * pre);\n    pos = mix(pos, pos2, t1);\n    pos = mix(pos, pos3, min(1., max(0., ((max(0., u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y))));\n    pos = mix(pos, pos4, min(1., max(0., ((max(0., u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z))));\n    // Later scatters (stamp scene, u_progress > 1) as before.\n    pos = mix(pos, pos * tParams3.x, ex * (1. - pre));\n\n    vec4 tOtarget = texture2D(t_oTarget, vUv);\n    vec4 tOVelocity = texture2D(t_oVelocity, vUv);\n\n    float spring = u_spring + tParams.w;\n    float friction = u_friction;\n\n    // Scroll sway while exploded (p 1.1-2.7): every particle drifts left/right by its own amount (parallax).\n    pos.xy += u_sway * (0.55 + 0.9 * tParams.x) * u_explode;\n\n    float dx = pos.x - tOtarget.x;\n    float dy = pos.y - tOtarget.y;\n    float dz = pos.z - tOtarget.z;\n\n    float ax = dx * spring;\n    float ay = dy * spring;\n    float az = dz * spring;\n\n    float wasTp = tOVelocity.w;\n    vx = tOVelocity.x * (1. - wasTp) + ax;\n    vy = tOVelocity.y * (1. - wasTp) + ay;\n    vz = tOVelocity.z * (1. - wasTp) + az;\n\n    vx *= friction;\n    vy *= friction;\n    vz *= friction;\n\n  }\n\n  gl_FragColor = vec4(vec3(vx, vy, vz), tp);\n}\n"
       }),
       scene: true
     });
@@ -4693,18 +4696,18 @@ ${e.fragmentShader}`;
     this._depthMaterial.customUniforms.u_delta.value.y += (this._mDelta.y - this._depthMaterial.customUniforms.u_delta.value.y) * (this._easing * 0.75);
   }
   _updateSway(e, t) {
-    // Drift of the scattered cloud: right on p 1.6-2.0, left on 1.9-2.1; faded out before the cloud finishes its
-    // turn (the sheet turns while it scatters, p 1.6-2.3, like the stamped sheet at 4.5-5) and the cloud folds into the streams from left to right (2.3-3), so the baked stream layout stays exact.
+    // Drift of the scattered cloud: switched off (target 0), so the cloud scatters on the left and folds straight into the
+    // streams from right to left (2.3-3), with no trip right / left first; the baked stream layout stays exact.
     // The sheet stays whole and still until the intro text has scrolled away (p ~1.6) and it is filled with data.
     const n = (a, b, c) => {
       const d = Math.min(1, Math.max(0, (c - a) / (b - a)));
       return d * d * (3 - 2 * d);
     };
     const i = t ? 1.7 : 1.6;
-    const env = n(i, i + 0.3, e) * (1 - n(2.1, 2.3, e));
+    const env = n(i, i + 0.3, e) * (1 - n(2.3, 2.9, e));
     const dir = 1 - 2 * n(1.85, 2.05, e);
-    const x = (t ? 0.5 : 1.2) * env * dir;
-    const y = (t ? 0.1 : 0.25) * env * -dir;
+    const x = 0 * env * dir; // sway removed: the cloud scatters and folds into the streams without drifting
+    const y = 0 * env * -dir;
     const sw = this._simulationSpring.material.uniforms.u_sway.value;
     sw.x += (x - sw.x) * this._easing;
     sw.y += (y - sw.y) * this._easing;
@@ -4721,12 +4724,50 @@ ${e.fragmentShader}`;
     this._updateSway(e, false);
     this._updateFill(e);
     const sm = (e2 => (a, b) => { const d = Math.min(1, Math.max(0, (e2 - a) / (b - a))); return d * d * (3 - 2 * d); })(e);
-    const t = zt(Ut(e, 0, 1, 3, -3), -3, 3) + zt(Ut(e, 1.65, 2, 0.905, 3.5), 0.905, 3.5) - (0.905 + 2.095 * sm(2.3, 3)) + zt(Ut(e, 4.5, 5, 0.905, 6), 0.905, 6) - zt(Ut(e, 4.5, 5, 0.905, 5), 0.905, 4);
+    // Centre the sheet in its half of the screen: right half -> left half at the start (p 0-1), left half in the stamp
+    // scene (p 3.5-4.5).  q = a quarter of the visible width at the depth of the sheet (_pSize: depth 10), so it follows
+    // the viewport.  The corrections fade out while the particles fly (scatter 1.65-2.3, streams folding into the sheet
+    // 3.3-3.5, scatter 4.5-5), so the baked streams and the final sheet stay exact.
+    const q = this._pSize ? this._pSize.width / 4 : 3;
+    const c1 = (zt(Ut(e, 0, 1, 3, -3), -3, 3) - zt(Ut(e, 0, 1, q, -q), -q, q)) * (1 - sm(1.65, 2.3));
+    const c2 = (q - 2.5) * (sm(3.3, 3.5) - sm(4.5, 5));
+    // While scattering the sheet moves to the left (x -2.5) and stays there: it sways, turns and folds into the streams
+    // there, with no extra trip back to the centre before the streams.
+    const t = zt(Ut(e, 0, 1, 3, -3), -3, 3) + 0.5 * sm(1.65, 2) + zt(Ut(e, 4.5, 5, 0.905, 6), 0.905, 6) - zt(Ut(e, 4.5, 5, 0.905, 5), 0.905, 4) - c1 - c2;
+    // Towards the end of the turn (p 1.9-2.4) the scattered cloud moves to the centre of the right half (+q; the group sits
+    // at -2.5 then) and stays there while the streams grow out of it.  The shift is turned back by the current Y turn of the
+    // group, so it points right on screen and the cloud does not circle.
+    const cw = sm(1.9, 2.4);
+    const cS = (q + 2.5) * cw;
+    // Total Y turn of the group: mesh rotation (baseRotation) and the shader turn, which rotates by -u_rotation.y.
+    // The local shift is the screen-right vector turned back by it: R_y(-phi) * (S, 0, 0) = (S cos phi, 0, S sin phi).
+    const phi = this.rotation.y - this._material.customUniforms[15].value.y;
+    const cl = this._simulationSpring.material.uniforms.u_cloud.value;
+    cl.x = cS * Math.cos(phi);
+    cl.y = 0;
+    cl.z = cS * Math.sin(phi);
+    cl.w = cw;
     this._params.basePosition.x = t + this._material.customUniforms[10].value.x * 0;
-    const n = 0.5 * sm(2.3, 3) - zt(Ut(e, 4.5, 5, 0, 0.5), 0, 0.5) + zt(Ut(e, 5.7, 6, 0, 1.75), 0, 1.75);
+    // Centre the sheet vertically in the block too: the particle group sits below the screen centre (its view-space y,
+    // from the mesh matrix the vertex shader uses), so the offset cancels it while the whole sheet is shown (start and
+    // stamp scene, the same windows as c1 / c2).  The sheet is centred on the group origin.
+    const gy = this._mesh ? this._mesh.modelViewMatrix.elements[13] : 0;
+    const w1 = 1 - sm(1.65, 2.3);
+    const w2 = sm(3.3, 3.5) - sm(4.5, 5);
+    const cy = -gy * w1 + (-gy - 0.5) * w2;
+    // Centre it in the area below the header, not in the whole viewport: shift down by half the header height
+    // (px -> world units at the depth of the sheet). The header height is read once per viewport size.
+    if (this._hdrKey !== window.innerWidth + "x" + window.innerHeight) {
+      const hdr = document.querySelector(".js-header");
+      this._hdrKey = window.innerWidth + "x" + window.innerHeight;
+      this._hdrPx = hdr ? Math.max(0, hdr.getBoundingClientRect().bottom) : 0;
+    }
+    const hy = this._pSize ? (this._hdrPx / 2) / window.innerHeight * this._pSize.height : 0;
+    const cyh = cy - hy * (w1 + w2);
+    const n = 0.5 * sm(2.3, 3) - zt(Ut(e, 4.5, 5, 0, 0.5), 0, 0.5) + zt(Ut(e, 5.7, 6, 0, 1.75), 0, 1.75) + cyh;
     this._params.basePosition.y = n + this._material.customUniforms[10].value.y * 0;
     const ex = Math.min(1, Math.max(0, (e - 1.6) / 0.7));
-    const i = ex * ex * (3 - 2 * ex) - sm(2.85, 3) + zt(Ut(e, 4.5, 5, 0, 1), 0, 1) - zt(Ut(e, 5.7, 6, 0, 1), 0, 1);
+    const i = ex * ex * (3 - 2 * ex) - sm(3, 3.25) + zt(Ut(e, 4.5, 5, 0, 1), 0, 1) - zt(Ut(e, 5.7, 6, 0, 1), 0, 1);
     this._material.customUniforms[13].value += (i - this._material.customUniforms[13].value) * this._easing;
     this._simulationPos.material.uniforms.u_explode.value += (i - this._simulationPos.material.uniforms.u_explode.value) * this._easing;
     this._simulationSpring.material.uniforms.u_explode.value += (i - this._simulationSpring.material.uniforms.u_explode.value) * this._easing;
