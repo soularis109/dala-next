@@ -1,4 +1,3 @@
-import TeamSlider from "./TeamSlider";
 import Investors from "./Investors";
 
 export default function TeamInvestors() {
@@ -17,7 +16,6 @@ export default function TeamInvestors() {
             Our team
           </h2>
         </div>
-        <TeamSlider />
         <div animate-from="y: '-5vw', scrollTrigger: { trigger: '.js-team-head', scrub: 0.5, once: false, start: 'top bottom' }">
           <h3
             className="text-blur t-36 t-lh-1 -t-ls-0.03 t-400 t-display mt-5@sm"

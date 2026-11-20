@@ -41,7 +41,7 @@ const VISA_UV = [0.5, 0.62]; // centre of the visa on the sheet
 const VISA_HALF_X = 1.45; // half width of the visa on the sheet (~55% of the sheet width)
 const VISA_PX = [130, 82]; // half size of the visa canvas in CSS px (260 x 164)
 const FINAL_MARK_UV = [0.31, 0.25]; // the FMB imprint on the final sheet, lower left, clear of the sheet edge
-const FINAL_MARK_HALF = 1.35;
+const FINAL_MARK_HALF = 0.9754; // 15% smaller than 1.1475 (15% smaller than 1.35 before)
 const FINAL_MARK_PX = 100; // half of the 200 px canvas
 
 // Point of the flat sheet at uv (0..1 from its left / bottom edge) plus an offset (dx right / dy up, in sheet units),
