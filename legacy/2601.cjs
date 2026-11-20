@@ -4712,9 +4712,10 @@ ${e.fragmentShader}`;
     sw.x += (x - sw.x) * this._easing;
     sw.y += (y - sw.y) * this._easing;
   }
-  // The first sheet is filled with data (title bar, rows, specks) while the intro text scrolls by (p 0.7-1.5).
+  // The first sheet is filled with data (title bar, rows, specks) while the intro text comes in (p 0.55-1.15): it is
+  // full by the time the intro text sits in the middle of the screen (p ~1.17, the scroll stop in ScrollSnap.tsx).
   _updateFill(e) {
-    const d = Math.min(1, Math.max(0, (e - 0.7) / 0.8));
+    const d = Math.min(1, Math.max(0, (e - 0.55) / 0.6));
     const f = d * d * (3 - 2 * d);
     const c = this._material.customUniforms[24];
     c.value += (f - c.value) * this._easing;
@@ -6080,6 +6081,7 @@ F.on("DOMContentLoaded", window, function () {
     touchScrollType: "scrollTop"
   }).withScrollTrigger(U.Z, A.ZP).create();
   u.RAFCollection.add(u.ASS.update, 0);
+  window.__ass = u.ASS; // read by app/components/ScrollSnap.tsx
   u.ScrollAnimations = new be();
   u.AssetLoader = new Te();
   u.WebGL = new bn();

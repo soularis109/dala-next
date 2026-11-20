@@ -14,6 +14,7 @@ import Footer from "./components/sections/Footer";
 import ScriptLoader from "./ScriptLoader";
 import DocumentStamp from "./components/DocumentStamp";
 import TextBlurSizer from "./components/TextBlurSizer";
+import ScrollSnap from "./components/ScrollSnap";
 
 export default function Page() {
   return (
@@ -66,6 +67,7 @@ export default function Page() {
         <canvas id="canvas" />
       </div>
       <DocumentStamp />
+      <ScrollSnap />
       <ScriptLoader />
     </>
   );

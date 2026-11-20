@@ -5,7 +5,9 @@ import { AMBER, BODY, FOLD, FONT, LIGHT, LILAC, PAPER, TEAL, TEXT, TITLE, VIOLET
 
 // Scene A: the stamp on the earlier document ("Spark lightbulb moments"), a pure function of the scroll
 // progress published by the engine (window.__siteProgress), so scrolling back reverses it exactly.
-const P = { approach: 3.95, press: 4.1, pressEnd: 4.18, lift: 4.3, inkStart: 4.12, scatter: 4.5, scatterEnd: 5 };
+// The stamp has lifted (4.15) just before "Spark lightbulb moments" sits in the middle of the screen (p ~4.17, the
+// scroll stop in ScrollSnap.tsx).
+const P = { approach: 3.8, press: 3.95, pressEnd: 4.03, lift: 4.15, inkStart: 3.97, scatter: 4.5, scatterEnd: 5 };
 
 // Scene B: the last document at the end of the site is the same document, already carrying the stamp imprint
 // (fades in while it forms, progress 5.7-5.95); then the visa is applied. The page ends at progress 6, so once
