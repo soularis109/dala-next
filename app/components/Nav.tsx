@@ -26,18 +26,6 @@ export default function Nav() {
             </li>
           )
         )}
-        <li className="nav__cta | js-nav-item">
-          <a
-            className="btn t-16 t-14@xs t-16@sm t-ls-0.025 t-600 t-uppercase"
-            aria-label="Request Access"
-            href="#"
-            target="_blank"
-            rel="noopener"
-          >
-            <span className="btn__text pointer-events-none">Request Access</span>
-            <div className="btn__hover pointer-events-none" aria-hidden="true"></div>
-          </a>
-        </li>
       </ul>
     </nav>
   );

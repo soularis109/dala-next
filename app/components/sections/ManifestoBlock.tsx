@@ -14,9 +14,9 @@ export default function ManifestoBlock({
       className={`section section--tall manifesto manifesto--section ${align} js-section`}
       section-name="manifesto"
     >
-      <div className="manifesto__inner mobile-blur">
+      <div className="manifesto__inner mobile-blur" data-cta-text="">
         <h2
-          className="manifesto__title t-32 t-lh-1.3 t-56@sm t-lh-0.9@sm t-lh-1.2@sm -t-ls-0.03 t-400 mb-1 mb-2@sm"
+          className="manifesto__title t-32 t-lh-1.3 t-56@sm t-lh-0.9@sm t-lh-1.2@sm -t-ls-0.03 t-400 t-display mb-1 mb-2@sm"
           animate-from="preset: 'splitTextRotateIn', scrollTrigger: { start: 'top bottom' }"
         >
           {title}

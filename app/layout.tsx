@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import { Playfair_Display, Montserrat } from "next/font/google";
 import { gtagInit, posthogInit } from "./analytics";
 
 const desc = "Your workplace has the answer. Just ask for it.";
@@ -42,21 +43,13 @@ export const viewport: Viewport = {
   themeColor: "#000000",
 };
 
-const fonts = ["Light", "Regular", "SemiBold"];
+const playfair = Playfair_Display({ subsets: ["latin", "cyrillic"], variable: "--font-playfair", display: "swap" });
+const montserrat = Montserrat({ subsets: ["latin", "cyrillic"], weight: ["300", "700"], variable: "--font-montserrat", display: "swap" });
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${playfair.variable} ${montserrat.variable}`}>
       <head>
-        {fonts.map((f) => (
-          <link
-            key={f}
-            rel="preload"
-            as="font"
-            href={`/fonts/PPNeueMontreal-${f}.woff2`}
-            crossOrigin=""
-          />
-        ))}
         {/* eslint-disable-next-line @next/next/no-css-tags */}
         <link rel="stylesheet" href="/css/style.css" />
       </head>

@@ -25,11 +25,12 @@ export default function ManifestoIntro() {
           <div className="section manifesto--introduction" key={i}>
             <div
               className="manifesto__body"
+              data-cta-text=""
               animate-from="preset: 'splitTextRotateIn', rotate: 7, delay: 0, duration: 0.8, scrollTrigger: { start: 'top bottom' }, children: '.js-manifesto-p'"
               animate-mq="sm"
             >
               {pair.map((text, j) => (
-                <p className="t-24 t-lh-1.3 -t-ls-0.03 t-48@sm t-lh-1.2@sm t-400 | js-manifesto-p" key={j}>
+                <p className="t-24 t-lh-1.3 -t-ls-0.03 t-48@sm t-lh-1.2@sm t-400 t-display | js-manifesto-p" key={j}>
                   {text}
                 </p>
               ))}

@@ -16,22 +16,22 @@ const SOCIAL_LINKS = [
 export default function Footer() {
   return (
     <div className="section footer | js-section">
-      <div className="footer__head">
+      <div className="footer__head" data-cta-anchor="">
         <h2
-          className="t-40 t-lh-1 t-48@sm t-lh-1.2@sm t-64@md t-lh-1.1@md -t-ls-0.03 t-400 mb-2"
+          className="t-40 t-lh-1 t-48@sm t-lh-1.2@sm t-64@md t-lh-1.1@md -t-ls-0.03 t-400 t-display mb-2"
           animate-from="preset: 'splitTextRotateIn', scrollTrigger: { start: 'top bottom' }"
         >
           Your workplace has the answer. Ask to find it.
         </h2>
-        <div className="d-flex justify-center">
+        <div className="d-flex justify-center" data-cta-target="">
           <a
             className="btn t-16 t-14@xs t-16@sm t-ls-0.025 t-600 t-uppercase"
-            aria-label="Request access"
+            aria-label="Book Appointment"
             href="#"
             target="_blank"
             rel="noopener"
           >
-            <span className="btn__text pointer-events-none">Request access</span>
+            <span className="btn__text pointer-events-none">Book Appointment</span>
             <div className="btn__hover pointer-events-none" aria-hidden="true"></div>
           </a>
         </div>

@@ -3702,7 +3702,7 @@ ${e.fragmentShader}`;
   }
   _updatePosition() {
     const e = u.sectionProgress;
-    const t = zt(Ut(e, 0, 1, 2, -5), -5, 1) + zt(Ut(e, 1.25, 1.5, 0, 5), 0, 5) - zt(Ut(e, 2.7, 3, 0, 5), 0, 5) + zt(Ut(e, 3.3, 3.5, 0, 5), 0, 9) - zt(Ut(e, 4.5, 5, 0, 5), 0, 4);
+    const t = zt(Ut(e, 0, 1, 2, -5), -5, 1) + zt(Ut(e, 1.25, 1.5, 0, 5), 0, 5) - zt(Ut(e, 2.3, 3, 0, 5), 0, 5) + zt(Ut(e, 3.3, 3.5, 0, 5), 0, 9) - zt(Ut(e, 4.5, 5, 0, 5), 0, 4);
     this._params.basePosition.x = t * 0.25;
     this.position.x += (this._params.basePosition.x - this.position.x) * this._easing;
   }
@@ -4139,7 +4139,7 @@ class an extends Re.T {
           }
         },
         vertexShader: sn,
-        fragmentShader: "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D t_oTarget;\nuniform sampler2D t_position;\nuniform sampler2D t_oVelocity;\nuniform sampler2D t_params;\nuniform sampler2D t_params2;\nuniform sampler2D t_params3;\n\nuniform vec2 u_resolution;\nuniform float u_factor;\nuniform float u_length;\nuniform float u_show;\nuniform float u_explode;\nuniform float u_progress;\nuniform float u_time;\nuniform float u_spring;\nuniform float u_friction;\nuniform float u_rendered;\nuniform float u_delay;\nuniform vec2 u_sway;\n\nvarying vec2 vUv;\n\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return step(inValue , 0.5) * inValue + step(0.5,outValue) * outValue;\n}\n\nvoid main() {\n  float vx = 0.;\n  float vy = 0.;\n  float vz = 0.;\n  float tp = 0.;\n\n  if (u_rendered > 0.) {\n    vec4 tParams = texture2D(t_params, vUv);\n    vec4 tParams2 = texture2D(t_params2, vUv);\n    vec4 tParams3 = texture2D(t_params3, vUv);\n\n    // Show Animation -----\n    float d = 0.00005;\n    float d3 = 0.00015;\n    float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * tParams.z));\n    showVal = qinticInOut(showVal);\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + u_explode * tParams.y;\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w)) * 6.;\n    float radius = mix(u_factor + tParams.x * 3., u_factor, showVal);\n\n    vec3 pos = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5)).xyz;\n    vec3 basePos = pos;\n\n    pos.x = (pos.x - 0.5) * 2. * radius;\n    pos.y = (pos.y - 0.5) * 2. * radius;\n    pos.z = (pos.z - 0.5) * 2. * radius;\n\n    vec3 pos2 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5)).xyz;\n    pos2.x = (pos2.x - 0.5) * 2. * radius;\n    pos2.y = (pos2.y - 0.5) * 2. * radius;\n    pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n    vec3 pos3 = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos3.x = (pos3.x - 0.5) * 2. * radius;\n    pos3.y = (pos3.y - 0.5) * 2. * radius;\n    pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n    vec3 pos4 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos4.x = (pos4.x - 0.5) * 2. * radius;\n    pos4.y = (pos4.y - 0.5) * 2. * radius;\n    pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xy *= u_resolution * 2.;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xyz *= vec3(u_resolution * 2., u_resolution.x * 2.);\n\n    float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for dekstop\n    pos = mix(pos, pos2, min(1., max(0., ((u_progress * (1. + d4 * (u_length - 1.))) - d4 * tParams2.x))));\n    pos = mix(pos, pos3, min(1., max(0., ((max(0., u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y))));\n    pos = mix(pos, pos4, min(1., max(0., ((max(0., u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z))));\n    pos = mix(pos, pos * tParams3.x, min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w)));\n\n    vec4 tOtarget = texture2D(t_oTarget, vUv);\n    vec4 tOVelocity = texture2D(t_oVelocity, vUv);\n\n    float spring = u_spring + tParams.w;\n    float friction = u_friction;\n\n    // Scroll sway while exploded (p 1.1-2.7): every particle drifts left/right by its own amount (parallax).\n    pos.xy += u_sway * (0.55 + 0.9 * tParams.x) * u_explode;\n\n    float dx = pos.x - tOtarget.x;\n    float dy = pos.y - tOtarget.y;\n    float dz = pos.z - tOtarget.z;\n\n    float ax = dx * spring;\n    float ay = dy * spring;\n    float az = dz * spring;\n\n    float wasTp = tOVelocity.w;\n    vx = tOVelocity.x * (1. - wasTp) + ax;\n    vy = tOVelocity.y * (1. - wasTp) + ay;\n    vz = tOVelocity.z * (1. - wasTp) + az;\n\n    vx *= friction;\n    vy *= friction;\n    vz *= friction;\n\n  }\n\n  gl_FragColor = vec4(vec3(vx, vy, vz), tp);\n}\n"
+        fragmentShader: "precision highp float;\n#define GLSLIFY 1\n\nuniform sampler2D t_oTarget;\nuniform sampler2D t_position;\nuniform sampler2D t_oVelocity;\nuniform sampler2D t_params;\nuniform sampler2D t_params2;\nuniform sampler2D t_params3;\n\nuniform vec2 u_resolution;\nuniform float u_factor;\nuniform float u_length;\nuniform float u_show;\nuniform float u_explode;\nuniform float u_progress;\nuniform float u_time;\nuniform float u_spring;\nuniform float u_friction;\nuniform float u_rendered;\nuniform float u_delay;\nuniform vec2 u_sway;\n\nvarying vec2 vUv;\n\nfloat qinticInOut(float x)\n{\n  //  x < 0.5 ? 16 * x * x * x * x * x : 1 - pow(-2 * x + 2, 5) / 2;\n  float inValue = 16.0 * x * x * x * x * x;\n  float outValue = 1.0 - pow(-2.0 * x + 2.0, 5.0) / 2.0;\n  return step(inValue , 0.5) * inValue + step(0.5,outValue) * outValue;\n}\n\nvoid main() {\n  float vx = 0.;\n  float vy = 0.;\n  float vz = 0.;\n  float tp = 0.;\n\n  if (u_rendered > 0.) {\n    vec4 tParams = texture2D(t_params, vUv);\n    vec4 tParams2 = texture2D(t_params2, vUv);\n    vec4 tParams3 = texture2D(t_params3, vUv);\n\n    // Show Animation -----\n    float d = 0.00005;\n    float d3 = 0.00015;\n    float showVal = min(1., max(0., (u_show * (1. + d * (u_length - 1.))) - d * tParams.z));\n    showVal = qinticInOut(showVal);\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + u_explode * tParams.y;\n    // float radius = mix(u_factor + tParams.x * 3., u_factor, showVal) + min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w)) * 6.;\n    float radius = mix(u_factor + tParams.x * 3., u_factor, showVal);\n\n    vec3 pos = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5)).xyz;\n    vec3 basePos = pos;\n\n    pos.x = (pos.x - 0.5) * 2. * radius;\n    pos.y = (pos.y - 0.5) * 2. * radius;\n    pos.z = (pos.z - 0.5) * 2. * radius;\n\n    vec3 pos2 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5)).xyz;\n    pos2.x = (pos2.x - 0.5) * 2. * radius;\n    pos2.y = (pos2.y - 0.5) * 2. * radius;\n    pos2.z = (pos2.z - 0.5) * 2. * radius;\n\n    vec3 pos3 = texture2D(t_position, vec2(vUv.x * 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos3.x = (pos3.x - 0.5) * 2. * radius;\n    pos3.y = (pos3.y - 0.5) * 2. * radius;\n    pos3.z = (pos3.z - 0.5) * 2. * radius;\n\n    vec3 pos4 = texture2D(t_position, vec2(vUv.x * 0.5 + 0.5, vUv.y * 0.5 + 0.5)).xyz;\n    pos4.x = (pos4.x - 0.5) * 2. * radius;\n    pos4.y = (pos4.y - 0.5) * 2. * radius;\n    pos4.z = (pos4.z - 0.5) * 2. * radius;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xy *= u_resolution * 2.;\n\n    // vec3 pos5 = tParams3.xyz;\n    // pos5.xyz *= vec3(u_resolution * 2., u_resolution.x * 2.);\n\n    float d2 = 0.0005;\n    float d4 = u_delay; // 0.000025 for mobile and 0.0005 for dekstop\n    // Gather into the streams as a wave from left to right: tParams2.x = order by x in bank 1; each particle takes 1/6 of\n    // the window (u_delay is not bound to this material, so d4 is 0 here).\n    float dg = 5. / u_length;\n    float t1 = min(1., max(0., ((u_progress * (1. + dg * (u_length - 1.))) - dg * tParams2.x)));\n    pos = mix(pos, pos2, t1);\n    pos = mix(pos, pos3, min(1., max(0., ((max(0., u_progress - 1.) * (1. + d2 * (u_length - 1.))) - d2 * tParams2.y))));\n    pos = mix(pos, pos4, min(1., max(0., ((max(0., u_progress - 2.) * (1. + d4 * (u_length - 1.))) - d4 * tParams2.z))));\n    // While the cloud folds into the streams (u_progress <= 1) each particle drops its scatter as it reaches its stream\n    // spot: the streams fill from left to right (tParams2.x = order by x in bank 1).\n    float ex = min(1., max(0., u_explode * (1. + d3 * (u_length - 1.)) - d3 * tParams2.w));\n    ex *= 1. - t1 * (1. - step(1.001, u_progress));\n    pos = mix(pos, pos * tParams3.x, ex);\n\n    vec4 tOtarget = texture2D(t_oTarget, vUv);\n    vec4 tOVelocity = texture2D(t_oVelocity, vUv);\n\n    float spring = u_spring + tParams.w;\n    float friction = u_friction;\n\n    // Scroll sway while exploded (p 1.1-2.7): every particle drifts left/right by its own amount (parallax).\n    pos.xy += u_sway * (0.55 + 0.9 * tParams.x) * u_explode;\n\n    float dx = pos.x - tOtarget.x;\n    float dy = pos.y - tOtarget.y;\n    float dz = pos.z - tOtarget.z;\n\n    float ax = dx * spring;\n    float ay = dy * spring;\n    float az = dz * spring;\n\n    float wasTp = tOVelocity.w;\n    vx = tOVelocity.x * (1. - wasTp) + ax;\n    vy = tOVelocity.y * (1. - wasTp) + ay;\n    vz = tOVelocity.z * (1. - wasTp) + az;\n\n    vx *= friction;\n    vy *= friction;\n    vz *= friction;\n\n  }\n\n  gl_FragColor = vec4(vec3(vx, vy, vz), tp);\n}\n"
       }),
       scene: true
     });
@@ -4670,7 +4670,7 @@ ${e.fragmentShader}`;
   }
   _updateRotation() {
     const e = u.sectionProgress;
-    const t = zt(Ut(e, 0, 1, 0, -Math.PI * 0.2), -Math.PI * 0.2, 0) + zt(Ut(e, 1.6, 2.3, 0, Math.PI * 0.25), 0, Math.PI * 0.25) - zt(Ut(e, 1.6, 2.3, 0, Math.PI * 1.25), 0, Math.PI * 1.25) - zt(Ut(e, 2.3, 2.6, 0, Math.PI), 0, Math.PI) + zt(Ut(e, 2.7, 3, 0, Math.PI * 0.2), 0, Math.PI * 0.2) + zt(Ut(e, 4.5, 5, 0, Math.PI * 0.25), 0, Math.PI * 0.25) - zt(Ut(e, 4.5, 5, 0, Math.PI * 1.25), 0, Math.PI * 1.25) + zt(Ut(e, 5.7, this.royYEnd, 0, Math.PI), 0, Math.PI);
+    const t = zt(Ut(e, 0, 1, 0, -Math.PI * 0.2), -Math.PI * 0.2, 0) + zt(Ut(e, 1.6, 2.3, 0, Math.PI * 0.25), 0, Math.PI * 0.25) - Math.PI * 2.05 * (d => d * d * (3 - 2 * d))(Math.min(1, Math.max(0, (e - 1.6) / 1))) + zt(Ut(e, 4.5, 5, 0, Math.PI * 0.25), 0, Math.PI * 0.25) - zt(Ut(e, 4.5, 5, 0, Math.PI * 1.25), 0, Math.PI * 1.25) + zt(Ut(e, 5.7, this.royYEnd, 0, Math.PI), 0, Math.PI);
     const n = zt(Ut(e, 2.7, 3, 0, 0), 0, 0) + 0;
     this._material.customUniforms[15].value.x += (0 - this._material.customUniforms[15].value.x) * (this._easing * 0.75);
     this._material.customUniforms[15].value.y += (t - this._material.customUniforms[15].value.y) * (this._easing * 0.75);
@@ -4694,7 +4694,7 @@ ${e.fragmentShader}`;
   }
   _updateSway(e, t) {
     // Drift of the scattered cloud: right on p 1.6-2.0, left on 1.9-2.1; faded out before the cloud finishes its
-    // turn (half while the sheet scatters, p 1.6-2.3, like the stamped sheet at 4.5-5; half as a cloud, p 2.3-2.6) and folds into the streams (2.7-3), so the baked stream layout stays exact.
+    // turn (the sheet turns while it scatters, p 1.6-2.3, like the stamped sheet at 4.5-5) and the cloud folds into the streams from left to right (2.3-3), so the baked stream layout stays exact.
     // The sheet stays whole and still until the intro text has scrolled away (p ~1.6) and it is filled with data.
     const n = (a, b, c) => {
       const d = Math.min(1, Math.max(0, (c - a) / (b - a)));
@@ -4720,24 +4720,25 @@ ${e.fragmentShader}`;
     const e = u.sectionProgress;
     this._updateSway(e, false);
     this._updateFill(e);
-    const t = zt(Ut(e, 0, 1, 3, -3), -3, 3) + zt(Ut(e, 1.65, 2, 0.905, 3.5), 0.905, 3.5) - zt(Ut(e, 2.8, 3, 0.905, 3), 0.905, 3) + zt(Ut(e, 4.5, 5, 0.905, 6), 0.905, 6) - zt(Ut(e, 4.5, 5, 0.905, 5), 0.905, 4);
+    const sm = (e2 => (a, b) => { const d = Math.min(1, Math.max(0, (e2 - a) / (b - a))); return d * d * (3 - 2 * d); })(e);
+    const t = zt(Ut(e, 0, 1, 3, -3), -3, 3) + zt(Ut(e, 1.65, 2, 0.905, 3.5), 0.905, 3.5) - (0.905 + 2.095 * sm(2.3, 3)) + zt(Ut(e, 4.5, 5, 0.905, 6), 0.905, 6) - zt(Ut(e, 4.5, 5, 0.905, 5), 0.905, 4);
     this._params.basePosition.x = t + this._material.customUniforms[10].value.x * 0;
-    const n = zt(Ut(e, 2.7, 3, 0, 0.5), 0, 0.5) - zt(Ut(e, 4.5, 5, 0, 0.5), 0, 0.5) + zt(Ut(e, 5.7, 6, 0, 1.75), 0, 1.75);
+    const n = 0.5 * sm(2.3, 3) - zt(Ut(e, 4.5, 5, 0, 0.5), 0, 0.5) + zt(Ut(e, 5.7, 6, 0, 1.75), 0, 1.75);
     this._params.basePosition.y = n + this._material.customUniforms[10].value.y * 0;
     const ex = Math.min(1, Math.max(0, (e - 1.6) / 0.7));
-    const i = ex * ex * (3 - 2 * ex) - zt(Ut(e, 2.8, 3, 0, 1), 0, 1) + zt(Ut(e, 4.5, 5, 0, 1), 0, 1) - zt(Ut(e, 5.7, 6, 0, 1), 0, 1);
+    const i = ex * ex * (3 - 2 * ex) - sm(2.85, 3) + zt(Ut(e, 4.5, 5, 0, 1), 0, 1) - zt(Ut(e, 5.7, 6, 0, 1), 0, 1);
     this._material.customUniforms[13].value += (i - this._material.customUniforms[13].value) * this._easing;
     this._simulationPos.material.uniforms.u_explode.value += (i - this._simulationPos.material.uniforms.u_explode.value) * this._easing;
     this._simulationSpring.material.uniforms.u_explode.value += (i - this._simulationSpring.material.uniforms.u_explode.value) * this._easing;
-    const r = this._factor + zt(Ut(e, 2.3, 2.6, 0, 0.3), 0, 0.3) - zt(Ut(e, 2.55, 2.7, 0, 0.3), 0, 0.3) + zt(Ut(e, 4.5, 5, 0, 0.3), 0, 0.3) - zt(Ut(e, 5.7, 6, 0, 1), 0, 1);
+    const r = this._factor + zt(Ut(e, 4.5, 5, 0, 0.3), 0, 0.3) - zt(Ut(e, 5.7, 6, 0, 1), 0, 1);
     this._material.customUniforms[3].value += (r - this._material.customUniforms[3].value) * this._easing;
     this._simulationPos.material.uniforms.u_factor.value += (r - this._simulationPos.material.uniforms.u_factor.value) * this._easing;
     this._simulationSpring.material.uniforms.u_factor.value += (r - this._simulationPos.material.uniforms.u_factor.value) * this._easing;
-    const o = zt(Ut(e, 2.7, 3, 0, 1), 0, 1) + zt(Ut(e, 3.3, 3.5, 0, 1), 0, 1) + zt(Ut(e, 5.7, 6, 0, 1), 0, 1);
+    const o = zt(Ut(e, 2.3, 3, 0, 1), 0, 1) + zt(Ut(e, 3.3, 3.5, 0, 1), 0, 1) + zt(Ut(e, 5.7, 6, 0, 1), 0, 1);
     this._material.customUniforms[14].value += (o - this._material.customUniforms[14].value) * this._easing;
     this._simulationPos.material.uniforms.u_progress.value += (o - this._simulationPos.material.uniforms.u_progress.value) * this._easing;
     this._simulationSpring.material.uniforms.u_progress.value += (o - this._simulationSpring.material.uniforms.u_progress.value) * this._easing;
-    const s = zt(Ut(e, 0, 1, 0, 1), 0, 1) - zt(Ut(e, 2.7, 3, 0, 1), 0, 1) + zt(Ut(e, 3, 3.5, 0, 1), 0, 1) - zt(Ut(e, 5.5, 5.5, 0, 1), 0, 1);
+    const s = zt(Ut(e, 0, 1, 0, 1), 0, 1) - zt(Ut(e, 2.3, 3, 0, 1), 0, 1) + zt(Ut(e, 3, 3.5, 0, 1), 0, 1) - zt(Ut(e, 5.5, 5.5, 0, 1), 0, 1);
     this._material.customUniforms[20].value += (s - this._material.customUniforms[20].value) * this._easing;
     this._depthMaterial.customUniforms.u_progress2.value += (s - this._depthMaterial.customUniforms.u_progress2.value) * this._easing;
     this._material.customUniforms[12].value.x += (this._params.basePosition.x - this._material.customUniforms[12].value.x) * this._easing;
@@ -4753,11 +4754,11 @@ ${e.fragmentShader}`;
     this._params.basePosition.x = t + this._material.customUniforms[10].value.x * 0.052;
     this._params.basePosition.y = 2 + this._material.customUniforms[10].value.y * 0;
     const ex = Math.min(1, Math.max(0, (e - 1.65) / 0.65));
-    const n = ex * ex * (3 - 2 * ex) - zt(Ut(e, 2.7, 3, 0, 1), 0, 1) + zt(Ut(e, 4.5, 5, 0, 1), 0, 1) - zt(Ut(e, 5.7, 5.8, 0, 1), 0, 1);
+    const n = ex * ex * (3 - 2 * ex) - (e2 => (a, b) => { const d = Math.min(1, Math.max(0, (e2 - a) / (b - a))); return d * d * (3 - 2 * d); })(e)(2.85, 3) + zt(Ut(e, 4.5, 5, 0, 1), 0, 1) - zt(Ut(e, 5.7, 5.8, 0, 1), 0, 1);
     this._material.customUniforms[13].value += (n - this._material.customUniforms[13].value) * this._easing;
     this._simulationPos.material.uniforms.u_explode.value += (n - this._simulationPos.material.uniforms.u_explode.value) * this._easing;
     this._simulationSpring.material.uniforms.u_explode.value += (n - this._simulationSpring.material.uniforms.u_explode.value) * this._easing;
-    const i = zt(Ut(e, 2.7, 3, 0, 1), 0, 1) + zt(Ut(e, 3.3, 3.5, 0, 1), 0, 1) + zt(Ut(e, 5.7, 5.8, 0, 1), 0, 1);
+    const i = zt(Ut(e, 2.3, 3, 0, 1), 0, 1) + zt(Ut(e, 3.3, 3.5, 0, 1), 0, 1) + zt(Ut(e, 5.7, 5.8, 0, 1), 0, 1);
     this._material.customUniforms[14].value += (i - this._material.customUniforms[14].value) * this._easing;
     this._simulationPos.material.uniforms.u_progress.value += (i - this._simulationPos.material.uniforms.u_progress.value) * this._easing;
     this._simulationSpring.material.uniforms.u_progress.value += (i - this._simulationSpring.material.uniforms.u_progress.value) * this._easing;
@@ -4992,8 +4993,8 @@ class gn {
     this._renderScene2.clear = false;
     this._renderScene2.clearDepth = true;
     this._bloomPass = new mn.m(new i.F(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-    this._bloomPass.threshold = Number(0.159);
-    this._bloomPass.strength = Number(0.4);
+    this._bloomPass.threshold = Number(0.45);
+    this._bloomPass.strength = Number(0.3);
     this._bloomPass.radius = Number(1);
     this._bokehApertureF = 0.00001;
     this._bokehPass = new fn(e, t, {

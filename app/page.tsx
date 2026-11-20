@@ -2,6 +2,7 @@ import NavToggle from "./components/NavToggle";
 import HeaderBlurBlock from "./components/HeaderBlurBlock";
 import Header from "./components/Header";
 import CookieNotice from "./components/CookieNotice";
+import FloatingCta from "./components/FloatingCta";
 import SiteLoader from "./components/SiteLoader";
 import NavTransitionMask from "./components/NavTransitionMask";
 import Landing from "./components/sections/Landing";
@@ -20,6 +21,7 @@ export default function Page() {
       <HeaderBlurBlock />
       <Header />
       <CookieNotice />
+      <FloatingCta />
       <SiteLoader />
       <NavTransitionMask />
       <div asscroll-container="">
