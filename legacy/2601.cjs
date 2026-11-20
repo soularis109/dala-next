@@ -4670,7 +4670,7 @@ ${e.fragmentShader}`;
   }
   _updateRotation() {
     const e = u.sectionProgress;
-    const t = zt(Ut(e, 0, 1, 0, -Math.PI * 0.2), -Math.PI * 0.2, 0) - zt(Ut(e, 2.3, 2.6, 0, Math.PI * 2), 0, Math.PI * 2) + zt(Ut(e, 2.7, 3, 0, Math.PI * 0.2), 0, Math.PI * 0.2) + zt(Ut(e, 4.5, 5, 0, Math.PI * 0.25), 0, Math.PI * 0.25) - zt(Ut(e, 4.5, 5, 0, Math.PI * 1.25), 0, Math.PI * 1.25) + zt(Ut(e, 5.7, this.royYEnd, 0, Math.PI), 0, Math.PI);
+    const t = zt(Ut(e, 0, 1, 0, -Math.PI * 0.2), -Math.PI * 0.2, 0) + zt(Ut(e, 1.6, 2.3, 0, Math.PI * 0.25), 0, Math.PI * 0.25) - zt(Ut(e, 1.6, 2.3, 0, Math.PI * 1.25), 0, Math.PI * 1.25) - zt(Ut(e, 2.3, 2.6, 0, Math.PI), 0, Math.PI) + zt(Ut(e, 2.7, 3, 0, Math.PI * 0.2), 0, Math.PI * 0.2) + zt(Ut(e, 4.5, 5, 0, Math.PI * 0.25), 0, Math.PI * 0.25) - zt(Ut(e, 4.5, 5, 0, Math.PI * 1.25), 0, Math.PI * 1.25) + zt(Ut(e, 5.7, this.royYEnd, 0, Math.PI), 0, Math.PI);
     const n = zt(Ut(e, 2.7, 3, 0, 0), 0, 0) + 0;
     this._material.customUniforms[15].value.x += (0 - this._material.customUniforms[15].value.x) * (this._easing * 0.75);
     this._material.customUniforms[15].value.y += (t - this._material.customUniforms[15].value.y) * (this._easing * 0.75);
@@ -4693,8 +4693,8 @@ ${e.fragmentShader}`;
     this._depthMaterial.customUniforms.u_delta.value.y += (this._mDelta.y - this._depthMaterial.customUniforms.u_delta.value.y) * (this._easing * 0.75);
   }
   _updateSway(e, t) {
-    // Drift of the scattered cloud: right on p 1.6-2.0, left on 1.9-2.1; faded out before the cloud makes its
-    // full turn (p 2.3-2.6) and folds into the streams (2.7-3), so the baked stream layout stays exact.
+    // Drift of the scattered cloud: right on p 1.6-2.0, left on 1.9-2.1; faded out before the cloud finishes its
+    // turn (half while the sheet scatters, p 1.6-2.3, like the stamped sheet at 4.5-5; half as a cloud, p 2.3-2.6) and folds into the streams (2.7-3), so the baked stream layout stays exact.
     // The sheet stays whole and still until the intro text has scrolled away (p ~1.6) and it is filled with data.
     const n = (a, b, c) => {
       const d = Math.min(1, Math.max(0, (c - a) / (b - a)));
