@@ -1,13 +1,17 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { AMBER, BODY, FOLD, FONT, LIGHT, LILAC, PAPER, TEAL, TEXT, TITLE, VIOLET, clamp255, drawLogoMark, drawStampMark, makeRng, mix, prepareCanvas } from "./mosaic";
+import { AMBER, BODY, FOLD, FONT, LIGHT, LILAC, PAPER, TEAL, TEXT, TITLE, VIOLET, buildStampMark, cellMaker, clamp255, drawLogoMark, makeRng, mix, paintMosaic, renderMosaic, rgb } from "./mosaic";
+import type { Cell, Hover, Mosaic } from "./mosaic";
 
 // Scene A: the stamp on the earlier document ("Spark lightbulb moments"), a pure function of the scroll
 // progress published by the engine (window.__siteProgress), so scrolling back reverses it exactly.
-// The stamp has lifted (4.15) just before "Spark lightbulb moments" sits in the middle of the screen (p ~4.17, the
-// scroll stop in ScrollSnap.tsx).
-const P = { approach: 3.8, press: 3.95, pressEnd: 4.03, lift: 4.15, inkStart: 3.97, scatter: 4.5, scatterEnd: 5 };
+// The stamp is timer-driven: it only comes down once the scroll has arrived at the stop of this stage ("Spark lightbulb
+// moments" centred, p ~4.167 in ScrollSnap.tsx) and the text is in place, plays for STAMP_SECONDS and rewinds when
+// scrolling back.  Only the scatter at the end (4.5-5) is a function of the scroll progress.
+const P = { arrive: 4.16, scatter: 4.5, scatterEnd: 5 };
+const STAMP_SECONDS = 1.5;
+const S = { approach: 0.35, press: 0.5, pressEnd: 0.6, lift: 1, inkStart: 0.5 }; // fractions of STAMP_SECONDS
 
 // Scene B: the last document at the end of the site is the same document, already carrying the stamp imprint
 // (fades in while it forms, progress 5.7-5.95); then the visa is applied. The page ends at progress 6, so once
@@ -56,8 +60,9 @@ const sheetPoint = (uv: number[], dx: number, dy: number, tilt: number): [number
 // projection gives the CSS matrix, so the element keeps the tilt and perspective of the sheet and follows it.  `hpx`/`hpy`
 // are the matrix basis: half the element size in CSS px when `post` centres the element itself (translate(-hpx, -hpy)),
 // or the extent of the content around the element origin when its children are already centred on it.
-// Returns false when the engine is not there (yet), the caller then keeps the plain CSS position.
-function glueToSheet(el: HTMLElement, uv: number[], hx: number, hy: number, tilt: number, hpx: number, hpy: number, post = "") {
+// Returns the matrix (a, b, c, d, e, f), or null when the engine is not there (yet): the caller then keeps the plain CSS position.
+type Mat = [number, number, number, number, number, number];
+function glueToSheet(el: HTMLElement, uv: number[], hx: number, hy: number, tilt: number, hpx: number, hpy: number, post = ""): Mat | null {
   const project = (window as unknown as { __siteProject?: Project }).__siteProject;
   const c = project?.(...sheetPoint(uv, 0, 0, tilt));
   const px = project?.(...sheetPoint(uv, hx, 0, tilt));
@@ -67,7 +72,7 @@ function glueToSheet(el: HTMLElement, uv: number[], hx: number, hy: number, tilt
     el.style.left = "";
     el.style.top = "";
     el.style.transformOrigin = "";
-    return false;
+    return null;
   }
   // unit vectors of the sheet in CSS px: x to the right of the sheet, y up on the sheet (CSS y points down)
   const a = (px[0] - c[0]) / hpx;
@@ -78,7 +83,68 @@ function glueToSheet(el: HTMLElement, uv: number[], hx: number, hy: number, tilt
   el.style.top = "0";
   el.style.transformOrigin = "0 0";
   el.style.transform = `matrix(${a}, ${b}, ${cc}, ${d}, ${c[0]}, ${c[1]}) ${post}`;
-  return true;
+  return [a, b, cc, d, c[0], c[1]];
+}
+
+// ---- the hover motion of the particles, on the squares of the glued canvases ----
+// Same formula as the vertex shader (tn in legacy/2601.cjs): within 1.25 + |max(delta)| world units of the cursor a square
+// sways by sin / cos(time * r1) * (r2 * 0.35 + delta) sheet units and grows (scale += 0.75 * dist on a base of ~0.51).
+type HoverState = { mouse: number[]; delta: number[]; time: number; explode: number; half: number[] };
+const GROW = 0.75 / ((84 / 255) * 1.55);
+
+// `m`: the glue matrix (element px -> screen px), `unit`: element px per sheet unit, `rot`: the CSS rotation of the
+// canvas about the glue origin (rad), `size` / `origin`: the canvas box in element px and where the glue origin sits in it.
+function sheetHover(st: HoverState, m: Mat, unit: number, rot: number, mosaic: Mosaic, size: number[], origin: number[]): Hover | null {
+  const [a, b, c, d, e, f] = m;
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const mx = (st.mouse[0] * 0.5 + 0.5) * W;
+  const my = (0.5 - st.mouse[1] * 0.5) * H;
+  const kx = (2 / W) * st.half[0]; // world units per screen px
+  const ky = (2 / H) * st.half[1];
+  const R = 1.25 + Math.abs(Math.max(st.delta[0], st.delta[1]));
+  const amp = Math.abs(st.explode - 1);
+  const sx = size[0] / mosaic.w;
+  const sy = size[1] / mosaic.h;
+  const cr = Math.cos(rot);
+  const sr = Math.sin(rot);
+  const toScreen = (x: number, y: number) => {
+    const qx = x * sx - origin[0];
+    const qy = y * sy - origin[1];
+    const rx = cr * qx - sr * qy;
+    const ry = sr * qx + cr * qy;
+    return [a * rx + c * ry + e, b * rx + d * ry + f];
+  };
+  // quick reject: the cursor zone does not reach the canvas at all
+  const corners = [toScreen(0, 0), toScreen(mosaic.w, 0), toScreen(0, mosaic.h), toScreen(mosaic.w, mosaic.h)];
+  const cx = corners.reduce((s, p) => s + p[0], 0) / 4;
+  const cy = corners.reduce((s, p) => s + p[1], 0) / 4;
+  const reach = Math.max(...corners.map((p) => Math.hypot((p[0] - cx) * kx, (p[1] - cy) * ky)));
+  if (amp <= 0 || Math.hypot((mx - cx) * kx, (my - cy) * ky) > R + reach) return null;
+  return (x, y, r1, r2) => {
+    const p = toScreen(x, y);
+    const dist01 = Math.hypot((p[0] - mx) * kx, (p[1] - my) * ky);
+    if (dist01 >= R) return null;
+    const t = 1 - dist01 / R;
+    const dist = t * t * (3 - 2 * t) * amp;
+    // sheet units (y up) -> rotated element px (y down) -> canvas px
+    const ux = dist * Math.sin(st.time * r1) * (r2 * 0.35 + st.delta[0]) * unit;
+    const uy = -dist * Math.cos(st.time * r1) * (r2 * 0.35 + st.delta[1]) * unit;
+    return [(cr * ux + sr * uy) / sx, (-sr * ux + cr * uy) / sy, 1 + GROW * dist];
+  };
+}
+
+// Keeps one glued canvas in step with the cursor: redraws while the cursor is over it, once more when it leaves.
+type Live = { ctx: CanvasRenderingContext2D | null; mosaic: Mosaic | null; moving: boolean };
+function updateLive(live: Live, hover: Hover | null) {
+  if (!live.ctx || !live.mosaic) return;
+  if (hover) {
+    renderMosaic(live.ctx, live.mosaic, hover);
+    live.moving = true;
+  } else if (live.moving) {
+    renderMosaic(live.ctx, live.mosaic);
+    live.moving = false;
+  }
 }
 
 // ---- visa drawn as a grainy mosaic, in the same palette as the document particles ----
@@ -86,11 +152,11 @@ const CELL = 6;
 const COLS = 54;
 const ROWS = 34;
 
-function drawVisa(canvas: HTMLCanvasElement) {
+function buildVisa(): Mosaic {
   const W = COLS * CELL;
   const H = ROWS * CELL;
-  const ctx = prepareCanvas(canvas, W, H);
-  if (!ctx) return;
+  const cells: Cell[] = [];
+  const add = cellMaker(cells, 7);
   const rnd = makeRng(7);
   const jit = (c: number[], a: number) => {
     const d = (rnd() - 0.5) * 2 * a;
@@ -131,19 +197,19 @@ function drawVisa(canvas: HTMLCanvasElement) {
       const edge = row === 0 || col === 0 || row === ROWS - 1 || col === COLS - 1;
       const j = edge ? 1.6 : 0.5;
       const s = CELL * (0.88 + rnd() * 0.12);
-      ctx.fillStyle = `rgb(${color[0] | 0},${color[1] | 0},${color[2] | 0})`;
-      ctx.fillRect(col * CELL + (rnd() - 0.5) * j, row * CELL + (rnd() - 0.5) * j, s, s);
+      add(col * CELL + (rnd() - 0.5) * j, row * CELL + (rnd() - 0.5) * j, s, rgb(color));
     }
   }
+  return { w: W, h: H, cells };
 }
 
 // The stamp body (handle, collar, barrel, rubber pad) built from the same squares as the document.
-function drawStampBody(canvas: HTMLCanvasElement) {
+function buildStampBody(): Mosaic {
   const SC = 5;
   const COLS_B = 26;
   const ROWS_B = 34;
-  const ctx = prepareCanvas(canvas, COLS_B * SC, ROWS_B * SC);
-  if (!ctx) return;
+  const cells: Cell[] = [];
+  const add = cellMaker(cells, 11);
   const rnd = makeRng(11);
   const jit = (c: number[], a: number) => {
     const d = (rnd() - 0.5) * 2 * a;
@@ -187,10 +253,10 @@ function drawStampBody(canvas: HTMLCanvasElement) {
       const edge = !kind(col - 1, row) || !kind(col + 1, row) || !kind(col, row - 1) || !kind(col, row + 1);
       const j = edge ? 1.6 : 0.5;
       const size = SC * (0.88 + rnd() * 0.12);
-      ctx.fillStyle = `rgb(${color[0] | 0},${color[1] | 0},${color[2] | 0})`;
-      ctx.fillRect(col * SC + (rnd() - 0.5) * j, row * SC + (rnd() - 0.5) * j, size, size);
+      add(col * SC + (rnd() - 0.5) * j, row * SC + (rnd() - 0.5) * j, size, rgb(color));
     }
   }
+  return { w: COLS_B * SC, h: ROWS_B * SC, cells };
 }
 
 
@@ -206,12 +272,26 @@ export default function DocumentStamp() {
   const markCanvasB = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (visaB.current) drawVisa(visaB.current);
-    if (bodyCanvasA.current) drawStampBody(bodyCanvasA.current);
-    if (markCanvasA.current) drawStampMark(markCanvasA.current);
-    if (markCanvasB.current) drawLogoMark(markCanvasB.current, "/images/FMB%20logo%20transparent.png");
+    const liveA: Live = { ctx: null, mosaic: null, moving: false };
+    const liveMarkB: Live = { ctx: null, mosaic: null, moving: false };
+    const liveVisa: Live = { ctx: null, mosaic: null, moving: false };
+    if (visaB.current) {
+      liveVisa.mosaic = buildVisa();
+      liveVisa.ctx = paintMosaic(visaB.current, liveVisa.mosaic);
+    }
+    if (bodyCanvasA.current) paintMosaic(bodyCanvasA.current, buildStampBody());
+    if (markCanvasA.current) {
+      liveA.mosaic = buildStampMark();
+      liveA.ctx = paintMosaic(markCanvasA.current, liveA.mosaic);
+    }
+    if (markCanvasB.current) drawLogoMark(markCanvasB.current, "/images/FMB%20logo%20transparent.png", (m, ctx) => {
+      liveMarkB.mosaic = m;
+      liveMarkB.ctx = ctx;
+    });
+    const hoverState = () => (window as unknown as { __siteHover?: () => HoverState | null }).__siteHover?.() ?? null;
+    const MARK_ROT = (-12 * Math.PI) / 180;
     let raf = 0;
-    let lastP = -1;
+    let aA = 0;
     let a = 0;
     let lastT = performance.now();
 
@@ -231,20 +311,27 @@ export default function DocumentStamp() {
       lastT = now;
       const p: number = (window as unknown as { __siteProgress?: number }).__siteProgress ?? 0;
 
-      // scene A (earlier document)
-      if (Math.abs(p - lastP) >= 0.0005) {
-        lastP = p;
-        const approach = smooth(p, P.approach, P.press);
-        const press = smooth(p, P.press, P.pressEnd);
-        const lift = smooth(p, P.pressEnd, P.lift);
-        const ink = smooth(p, P.inkStart, P.pressEnd) * (1 - smooth(p, P.scatter, P.scatterEnd));
-        const visible = p > P.approach - 0.05 && p < P.scatterEnd;
-        if (rootA.current) rootA.current.style.display = visible ? "block" : "none";
-        lower(bodyA.current, markA.current, approach, press, lift, ink);
+      // scene A (earlier document): timer-driven, starts when the stage has arrived at its stop
+      const targetA = p >= P.arrive ? 1 : 0;
+      if (aA !== targetA) {
+        const step = dt / STAMP_SECONDS;
+        aA = targetA > aA ? Math.min(targetA, aA + step) : Math.max(targetA, aA - step);
       }
-      // Every frame (the document keeps easing after the scroll stops): glue the stamp to its spot on the sheet, in the
-      // plane of the sheet, so it keeps the tilt of the document and travels, turns and scatters with it.
-      if (rootA.current && p > P.approach - 0.05 && p < P.scatterEnd) glueToSheet(rootA.current, STAMP_UV, STAMP_HALF, STAMP_HALF, DOC_TILT, MARK_HALF_PX, MARK_HALF_PX);
+      const visibleA = p > P.arrive - 0.3 && p < P.scatterEnd && (aA > 0 || p >= P.arrive);
+      if (rootA.current) rootA.current.style.display = visibleA ? "block" : "none";
+      if (visibleA) {
+        const approach = smooth(aA, 0, S.approach);
+        const press = smooth(aA, S.approach, S.press);
+        const lift = smooth(aA, S.pressEnd, S.lift);
+        const ink = smooth(aA, S.inkStart, S.pressEnd) * (1 - smooth(p, P.scatter, P.scatterEnd));
+        lower(bodyA.current, markA.current, approach, press, lift, ink);
+        // Every frame (the document keeps easing after the scroll stops): glue the stamp to its spot on the sheet, in the
+        // plane of the sheet, so it keeps the tilt of the document and travels, turns and scatters with it.
+        const mA = rootA.current && glueToSheet(rootA.current, STAMP_UV, STAMP_HALF, STAMP_HALF, DOC_TILT, MARK_HALF_PX, MARK_HALF_PX);
+        // the imprint is part of the sheet once it is inked: its squares sway under the cursor like the sheet's
+        const st = mA && ink > 0.01 ? hoverState() : null;
+        updateLive(liveA, st && mA && liveA.mosaic ? sheetHover(st, mA, MARK_HALF_PX / STAMP_HALF, MARK_ROT, liveA.mosaic, [190, 190], [95, 95]) : null);
+      } else updateLive(liveA, null);
 
       // scene B (last document): imprint follows the scroll, the visa is timer-driven and rewinds
       const target = p >= END_P ? 1 : 0;
@@ -258,10 +345,13 @@ export default function DocumentStamp() {
       if (visaB.current) visaB.current.style.opacity = String(smooth(a, E.visaIn, E.visaInEnd)); // fades in on the paper, no pop
       if (showB && rootB.current) {
         // both lie flat on the sheet and move with it; the matrices are in screen px, so the root sits at the screen origin
-        const glued = [
-          visaB.current && glueToSheet(visaB.current, VISA_UV, VISA_HALF_X, (VISA_HALF_X * VISA_PX[1]) / VISA_PX[0], FINAL_TILT, VISA_PX[0], VISA_PX[1], `translate(${-VISA_PX[0]}px, ${-VISA_PX[1]}px)`),
-          markB.current && glueToSheet(markB.current, FINAL_MARK_UV, FINAL_MARK_HALF, FINAL_MARK_HALF, FINAL_TILT, FINAL_MARK_PX, FINAL_MARK_PX, `rotate(-12deg) translate(${-FINAL_MARK_PX}px, ${-FINAL_MARK_PX}px)`),
-        ].every(Boolean);
+        const mVisa = visaB.current && glueToSheet(visaB.current, VISA_UV, VISA_HALF_X, (VISA_HALF_X * VISA_PX[1]) / VISA_PX[0], FINAL_TILT, VISA_PX[0], VISA_PX[1], `translate(${-VISA_PX[0]}px, ${-VISA_PX[1]}px)`);
+        const mMark = markB.current && glueToSheet(markB.current, FINAL_MARK_UV, FINAL_MARK_HALF, FINAL_MARK_HALF, FINAL_TILT, FINAL_MARK_PX, FINAL_MARK_PX, `rotate(-12deg) translate(${-FINAL_MARK_PX}px, ${-FINAL_MARK_PX}px)`);
+        const glued = Boolean(mVisa && mMark);
+        // visa and imprint sway under the cursor with the squares of the sheet they lie on
+        const st = hoverState();
+        updateLive(liveVisa, st && mVisa && liveVisa.mosaic && a > E.visaIn ? sheetHover(st, mVisa, VISA_PX[0] / VISA_HALF_X, 0, liveVisa.mosaic, [VISA_PX[0] * 2, VISA_PX[1] * 2], VISA_PX) : null);
+        updateLive(liveMarkB, st && mMark && liveMarkB.mosaic && p > B.inkStart ? sheetHover(st, mMark, FINAL_MARK_PX / FINAL_MARK_HALF, MARK_ROT, liveMarkB.mosaic, [FINAL_MARK_PX * 2, FINAL_MARK_PX * 2], [FINAL_MARK_PX, FINAL_MARK_PX]) : null);
         rootB.current.style.left = glued ? "0" : "";
         rootB.current.style.top = glued ? "0" : "";
       }
@@ -275,7 +365,7 @@ export default function DocumentStamp() {
       <style>{`
         .document-stamp { display: none; position: fixed; width: 0; height: 0; z-index: 5; pointer-events: none; }
         .document-stamp--a { left: 25%; top: 80%; }
-        .document-stamp--b { left: 47%; top: 37.5%; z-index: -1; } /* on the sheet, under the footer copy */
+        .document-stamp--b { left: 25%; top: 37.5%; z-index: -1; } /* on the sheet, under the footer copy */
         .document-stamp__mark { position: absolute; width: 190px; height: 190px; left: -95px; top: -95px; opacity: 0; transform: rotate(-12deg); mix-blend-mode: multiply; }
         .document-stamp__body { position: absolute; width: 130px; height: 169px; left: -65px; top: -150px; opacity: 0; transform-origin: 50% 100%; filter: drop-shadow(0 14px 18px rgba(0,0,0,.45)); }
         .document-stamp--b .document-stamp__mark { width: 200px; height: 200px; left: -133px; top: 103px; }

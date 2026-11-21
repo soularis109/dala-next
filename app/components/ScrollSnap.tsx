@@ -27,7 +27,7 @@ type Ass = {
 };
 
 // A stop is a scroll position; `free` describes the stage that ends at it (the one coming from the previous stop).
-type Stop = { px: number; free: boolean };
+type Stop = { px: number; free: boolean; slow?: number }; // slow: duration multiplier of the stage
 
 const getAss = (): Ass | undefined => (window as unknown as { __ass?: Ass }).__ass;
 
@@ -68,9 +68,9 @@ function stops(ass: Ass): Stop[] {
     return centre(ass.currentPos + Math.min(...rects.map((r) => r.top)), ass.currentPos + Math.max(...rects.map((r) => r.bottom)));
   });
 
-  const raw: Array<{ px: number | undefined; free?: boolean }> = [
+  const raw: Array<{ px: number | undefined; free?: boolean; slow?: number }> = [
     { px: 0 },
-    { px: heading(1) }, // Introduction: sheet moves left and fills
+    { px: heading(1), slow: 2 }, // Introduction: sheet moves left and fills (slower, so the filling can be followed)
     ...manifesto.map((px) => ({ px })), // scatter, turn, morph into streams
     { px: heading(3) }, // "Build a better world of work": streams fold into the document
     { px: heading(4) }, // "Spark lightbulb moments": stamp pressed and lifted (DocumentStamp.tsx P.lift = 4.15)
@@ -84,7 +84,7 @@ function stops(ass: Ass): Stop[] {
     if (s.px === undefined) continue;
     const px = Math.max(0, Math.min(maxScroll, s.px));
     if (result.length && px <= result[result.length - 1].px + EPS) continue;
-    result.push({ px, free: !!s.free });
+    result.push({ px, free: !!s.free, slow: s.slow });
   }
   return result;
 }
@@ -106,10 +106,10 @@ export default function ScrollSnap() {
       playing = false;
     };
 
-    const play = (ass: Ass, to: number) => {
+    const play = (ass: Ass, to: number, slow = 1) => {
       const from = ass.targetPos;
       const distanceVh = Math.abs(to - from) / window.innerHeight;
-      const duration = Math.max(DURATION_MIN_MS, Math.min(DURATION_MAX_MS, DURATION_BASE_MS + DURATION_PER_VH_MS * distanceVh));
+      const duration = Math.max(DURATION_MIN_MS, Math.min(DURATION_MAX_MS, DURATION_BASE_MS + DURATION_PER_VH_MS * distanceVh)) * slow;
       const startedAt = performance.now();
       playing = true;
 
@@ -171,7 +171,7 @@ export default function ScrollSnap() {
 
       // Animated stage: one gesture plays all of it.
       swallow(e);
-      if (newGesture) play(ass, next.px);
+      if (newGesture) play(ass, next.px, next.slow);
     };
 
     // Capture phase on window: runs before the engine's own wheel listener (also on window).

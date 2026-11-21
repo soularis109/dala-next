@@ -30,6 +30,49 @@ export const makeRng = (seed: number) => () => {
   t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
+// A mosaic is kept as a list of squares so it can be redrawn every frame with the hover motion of the document particles
+// (see DocumentStamp): x / y is the top-left corner in canvas px, s the side, r1 / r2 constant randoms like a_random.
+export type Cell = { x: number; y: number; s: number; color: string; r1: number; r2: number; tile?: { sx: number; sy: number; sw: number; sh: number } };
+export type Mosaic = { w: number; h: number; cells: Cell[]; overlay?: HTMLCanvasElement };
+// Offset (canvas px) and scale of one square under the cursor, or null when the square is out of reach.
+export type Hover = (cx: number, cy: number, r1: number, r2: number) => [number, number, number] | null;
+
+export const rgb = (c: number[]) => `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
+
+// Second random stream for r1 / r2, so the main stream (and with it the look of every mosaic) is unchanged.
+export const cellMaker = (cells: Cell[], seed: number) => {
+  const r = makeRng(seed + 7777);
+  return (x: number, y: number, s: number, color: string, tile?: Cell["tile"]) => cells.push({ x, y, s, color, r1: r(), r2: r(), tile });
+};
+
+// Draws a mosaic; with `hover` every square is moved / grown like the particles of the sheet under the cursor.
+export function renderMosaic(ctx: CanvasRenderingContext2D, m: Mosaic, hover?: Hover) {
+  ctx.clearRect(0, 0, m.w, m.h);
+  for (const c of m.cells) {
+    if (c.tile && !hover) continue; // at rest the overlay is drawn in one piece (below), no seams between tiles
+    let { x, y, s } = c;
+    const h = hover?.(x + s / 2, y + s / 2, c.r1, c.r2);
+    if (h) {
+      const s2 = s * h[2];
+      x += h[0] - (s2 - s) / 2;
+      y += h[1] - (s2 - s) / 2;
+      s = s2;
+    }
+    if (c.tile && m.overlay) ctx.drawImage(m.overlay, c.tile.sx, c.tile.sy, c.tile.sw, c.tile.sh, x, y, s, s);
+    else {
+      ctx.fillStyle = c.color;
+      ctx.fillRect(x, y, s, s);
+    }
+  }
+  if (!hover && m.overlay) ctx.drawImage(m.overlay, 0, 0, m.w, m.h);
+}
+
+export function paintMosaic(canvas: HTMLCanvasElement, m: Mosaic) {
+  const ctx = prepareCanvas(canvas, m.w, m.h);
+  if (ctx) renderMosaic(ctx, m);
+  return ctx;
+}
+
 export function prepareCanvas(canvas: HTMLCanvasElement, w: number, h: number) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   canvas.width = w * dpr;
@@ -42,10 +85,14 @@ export function prepareCanvas(canvas: HTMLCanvasElement, w: number, h: number) {
 
 // The round "APPROVED" imprint made of squares: two rings, "OK" in the pixel font around the band, the Cyprus flag in the middle.
 export function drawStampMark(canvas: HTMLCanvasElement, inkColor?: string) {
+  return paintMosaic(canvas, buildStampMark(inkColor));
+}
+
+export function buildStampMark(inkColor?: string): Mosaic {
   const SC = 4;
   const N = 50;
-  const ctx = prepareCanvas(canvas, N * SC, N * SC);
-  if (!ctx) return;
+  const cells: Cell[] = [];
+  const add = cellMaker(cells, 23);
   const rnd = makeRng(23);
   const jit = (c: number[], a: number) => {
     const d = (rnd() - 0.5) * 2 * a;
@@ -100,10 +147,10 @@ export function drawStampMark(canvas: HTMLCanvasElement, inkColor?: string) {
       if (!ink[row][col] || rnd() < 0.1) continue; // ~10% holes: an uneven imprint
       const color = inkColor ? jit(hexc(inkColor), 14) : rnd() < 0.2 ? jit(VIOLET, 12) : jit(TITLE, 14);
       const size = SC * (0.9 + rnd() * 0.1);
-      ctx.fillStyle = `rgb(${color[0] | 0},${color[1] | 0},${color[2] | 0})`;
-      ctx.fillRect(col * SC + (rnd() - 0.5) * 0.8, row * SC + (rnd() - 0.5) * 0.8, size, size);
+      add(col * SC + (rnd() - 0.5) * 0.8, row * SC + (rnd() - 0.5) * 0.8, size, rgb(color));
     }
   }
+  return { w: N * SC, h: N * SC, cells };
 }
 
 // A bold check mark made of squares, in the given colour (hex), for the investor marks.
@@ -142,7 +189,14 @@ export function drawCheckMark(canvas: HTMLCanvasElement, color: string, seed = 5
 // The site gold, deepened so it still reads as ink on the paper under mix-blend-mode: multiply.
 const GOLD_INK = mix(AMBER, [150, 105, 35], 0.55);
 
-export function drawLogoMark(canvas: HTMLCanvasElement, src: string) {
+export function drawLogoMark(canvas: HTMLCanvasElement, src: string, done?: (m: Mosaic, ctx: CanvasRenderingContext2D) => void) {
+  buildLogoMark(src, (m) => {
+    const ctx = paintMosaic(canvas, m);
+    if (ctx) done?.(m, ctx);
+  });
+}
+
+export function buildLogoMark(src: string, done: (m: Mosaic) => void) {
   const img = new Image();
   img.onload = () => {
     // bounding box of the opaque pixels, read on a small copy
@@ -179,8 +233,8 @@ export function drawLogoMark(canvas: HTMLCanvasElement, src: string) {
     gctx.drawImage(img, (cx - side / 2) * k, (cy - side / 2) * k, side * k, side * k, 0, 0, N, N);
     const gd = gctx.getImageData(0, 0, N, N).data;
 
-    const ctx = prepareCanvas(canvas, N * SC, N * SC);
-    if (!ctx) return;
+    const cells: Cell[] = [];
+    const add = cellMaker(cells, 29);
     const rnd = makeRng(23);
     const jit = (c: number[], a: number) => {
       const d = (rnd() - 0.5) * 2 * a;
@@ -189,7 +243,7 @@ export function drawLogoMark(canvas: HTMLCanvasElement, src: string) {
 
     // The lettering ("F.M.B. VIP / IMMIGRATION / SERVICES") is too fine for the N x N grid, so it is taken from the PNG
     // at full resolution: the dark, non-blue pixels in the middle of the ring, recoloured to the stamp ink.
-    const T = canvas.width; // the backing store size, so the text is as sharp as the screen allows
+    const T = N * SC * Math.min(2, window.devicePixelRatio || 1); // the backing store size, so the text is as sharp as the screen allows
     const text = document.createElement("canvas");
     text.width = T;
     text.height = T;
@@ -230,11 +284,17 @@ export function drawLogoMark(canvas: HTMLCanvasElement, src: string) {
         const gold = r > 140 && g > 110 && b < 120;
         const color = gold ? jit(GOLD_INK, 12) : rnd() < 0.2 ? jit(VIOLET, 12) : jit(TITLE, 14);
         const size = SC * (0.9 + rnd() * 0.1);
-        ctx.fillStyle = `rgb(${color[0] | 0},${color[1] | 0},${color[2] | 0})`;
-        ctx.fillRect(col * SC + (rnd() - 0.5) * 0.6, row * SC + (rnd() - 0.5) * 0.6, size, size);
+        add(col * SC + (rnd() - 0.5) * 0.6, row * SC + (rnd() - 0.5) * 0.6, size, rgb(color));
       }
     }
-    ctx.drawImage(text, 0, 0, N * SC, N * SC);
+    // the lettering on top, cut into one tile per grid cell so it moves with the squares under the cursor
+    const tw = T / N;
+    for (let row = 0; row < N; row++) {
+      for (let col = 0; col < N; col++) {
+        if (tgd[(row * N + col) * 4 + 3] > 0) add(col * SC, row * SC, SC, "", { sx: col * tw, sy: row * tw, sw: tw, sh: tw });
+      }
+    }
+    done({ w: N * SC, h: N * SC, cells, overlay: text });
   };
   img.src = src;
 }

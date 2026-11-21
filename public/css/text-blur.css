@@ -31,3 +31,25 @@
 @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
   .text-blur::before { background: rgba(0, 0, 0, 0.35); }
 }
+
+/* Same soft backdrop blur under the investor stamps / check marks (canvas, so no text lines to measure). */
+.investor__icon {
+  isolation: isolate;
+}
+
+.investor__icon::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  inset: -8%;
+  background: var(--tb-tint);
+  -webkit-backdrop-filter: blur(var(--tb-blur));
+  backdrop-filter: blur(var(--tb-blur));
+  -webkit-mask: radial-gradient(closest-side, #000 60%, transparent 100%);
+  mask: radial-gradient(closest-side, #000 60%, transparent 100%);
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .investor__icon::before { background: rgba(0, 0, 0, 0.35); }
+}
